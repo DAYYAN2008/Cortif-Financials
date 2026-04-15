@@ -1,0 +1,26 @@
+# Environment & Secrets
+.env*
+*.local
+supabase/.temp/
+
+# Node (Frontend & Root)
+node_modules/
+dist/
+build/
+.next/
+out/
+.vercel
+*.log
+
+# Python (Backend)
+**/__pycache__/
+*.py[cod]
+*$py.class
+backend/venv/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# OS Specific
+.DS_Store
+Thumbs.db
