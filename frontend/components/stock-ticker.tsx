@@ -63,9 +63,40 @@ interface StockTickerProps {
   stocks?: StockData[];
 }
 
-export function StockTicker({ stocks = MOCK_STOCKS }: StockTickerProps) {
+export function StockTicker({ stocks: initialStocks = MOCK_STOCKS }: StockTickerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [duration, setDuration] = useState(40);
+  const [stocks, setStocks] = useState<StockData[]>(initialStocks);
+  const [isConnected, setIsConnected] = useState(false);
+
+  // Initialize WebSocket connection
+  useEffect(() => {
+    const ws = new WebSocket("ws://localhost:8000/ws/ticker");
+
+    ws.onopen = () => {
+      setIsConnected(true);
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (Array.isArray(data)) {
+          setStocks(data);
+        }
+      } catch (error) {
+        console.error("Error parsing WebSocket data:", error);
+      }
+    };
+
+    ws.onclose = () => {
+      setIsConnected(false);
+    };
+
+    // Cleanup on unmount
+    return () => {
+      ws.close();
+    };
+  }, []);
 
   // Adjust scroll speed based on content width for consistent perceived speed
   useEffect(() => {
@@ -74,7 +105,7 @@ export function StockTicker({ stocks = MOCK_STOCKS }: StockTickerProps) {
       // ~60px per second
       setDuration(Math.max(25, contentWidth / 60));
     }
-  }, [stocks]);
+  }, [stocks.length]);
 
   // Duplicate the list for seamless looping
   const tickerItems = [...stocks, ...stocks];
@@ -82,16 +113,33 @@ export function StockTicker({ stocks = MOCK_STOCKS }: StockTickerProps) {
   return (
     <div
       id="stock-ticker"
-      className="relative w-full overflow-hidden border-b border-border/40 bg-[#f8f9fa]"
+      className="relative w-full overflow-hidden border-b border-border/40 bg-[#f8f9fa] flex items-center"
       aria-label="Live stock ticker"
     >
-      {/* Fade edges */}
-      <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-12 bg-gradient-to-r from-[#f8f9fa] to-transparent" />
+      {/* Live Indicator inside the fade edge */}
+      <div className="absolute left-0 z-20 flex items-center h-full px-4 bg-gradient-to-r from-[#f8f9fa] via-[#f8f9fa] to-transparent">
+        <div className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-white border border-slate-200 shadow-sm">
+          <span className="relative flex size-2">
+            {isConnected && (
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+            )}
+            <span
+              className={`relative inline-flex rounded-full size-2 ${
+                isConnected ? "bg-red-500" : "bg-slate-400"
+              }`}
+            ></span>
+          </span>
+          <span className="text-[10px] font-bold uppercase tracking-widest text-slate-600">
+            {isConnected ? "Live" : "Offline"}
+          </span>
+        </div>
+      </div>
+
       <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-12 bg-gradient-to-l from-[#f8f9fa] to-transparent" />
 
       <motion.div
         ref={containerRef}
-        className="flex items-center gap-3 py-2 px-4 will-change-transform"
+        className="flex items-center gap-3 py-2 px-4 will-change-transform ml-24"
         animate={{ x: ["0%", "-50%"] }}
         transition={{
           x: {
