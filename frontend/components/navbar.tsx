@@ -15,6 +15,7 @@ import {
   Webhook,
   FlaskConical,
 } from "lucide-react";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -51,16 +52,16 @@ function MegaMenuItem({
     <NavigationMenuLink
       href={href}
       render={<Link href={href} />}
-      className="flex items-start gap-3 rounded-md p-3 hover:bg-slate-50 focus:bg-slate-50 transition-colors"
+      className="flex items-start gap-3 rounded-md p-3 hover:bg-slate-50 focus:bg-slate-50 dark:hover:bg-slate-800 dark:focus:bg-slate-800 transition-colors"
     >
-      <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white">
-        <Icon className="size-4 text-slate-600" />
+      <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
+        <Icon className="size-4 text-slate-600 dark:text-slate-400" />
       </div>
       <div className="flex flex-col gap-0.5">
-        <span className="text-[13px] font-semibold leading-tight text-slate-900">
+        <span className="text-[13px] font-semibold leading-tight text-slate-900 dark:text-slate-100">
           {title}
         </span>
-        <span className="text-[11.5px] leading-snug text-slate-500">
+        <span className="text-[11.5px] leading-snug text-slate-500 dark:text-slate-400">
           {description}
         </span>
       </div>
@@ -84,9 +85,9 @@ function DropdownItem({
     <NavigationMenuLink
       href={href}
       render={<Link href={href} />}
-      className="flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] font-medium text-slate-700 hover:bg-slate-50 hover:text-slate-900 focus:bg-slate-50 transition-colors"
+      className="flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] font-medium text-slate-700 hover:bg-slate-50 hover:text-slate-900 focus:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100 dark:focus:bg-slate-800 transition-colors"
     >
-      <Icon className="size-3.5 text-slate-400" />
+      <Icon className="size-3.5 text-slate-400 dark:text-slate-500" />
       {label}
     </NavigationMenuLink>
   );
@@ -103,7 +104,7 @@ function BrandLogo() {
       id="logo-link"
     >
       {/* Icon Mark */}
-      <div className="flex items-center justify-center size-7 rounded-md bg-slate-900">
+      <div className="flex items-center justify-center size-7 rounded-md bg-slate-900 dark:bg-white">
         <svg
           viewBox="0 0 24 24"
           fill="none"
@@ -113,6 +114,7 @@ function BrandLogo() {
           <path
             d="M3 17L9 11L13 15L21 7"
             stroke="white"
+            className="dark:stroke-slate-900"
             strokeWidth="2.5"
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -120,6 +122,7 @@ function BrandLogo() {
           <path
             d="M17 7H21V11"
             stroke="white"
+            className="dark:stroke-slate-900"
             strokeWidth="2.5"
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -127,7 +130,7 @@ function BrandLogo() {
         </svg>
       </div>
       {/* Wordmark */}
-      <span className="text-[15px] font-bold tracking-tight text-slate-900">
+      <span className="text-[15px] font-bold tracking-tight text-slate-900 dark:text-white">
         Cortif 
       </span>
     </Link>
@@ -141,12 +144,12 @@ function CommandKSearch() {
   return (
     <button
       id="search-command-k"
-      className="hidden md:inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-[13px] text-slate-400 hover:border-slate-300 hover:bg-slate-100 hover:text-slate-500 transition-all cursor-pointer"
+      className="hidden md:inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-[13px] text-slate-400 hover:border-slate-300 hover:bg-slate-100 hover:text-slate-500 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-500 dark:hover:border-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-400 transition-all cursor-pointer"
       aria-label="Search (⌘K)"
     >
       <Search className="size-3.5" />
       <span>Search...</span>
-      <kbd className="pointer-events-none ml-3 inline-flex h-5 items-center gap-0.5 rounded border border-slate-200 bg-white px-1.5 font-mono text-[10px] font-medium text-slate-400 select-none">
+      <kbd className="pointer-events-none ml-3 inline-flex h-5 items-center gap-0.5 rounded border border-slate-200 bg-white px-1.5 font-mono text-[10px] font-medium text-slate-400 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-500 select-none">
         ⌘K
       </kbd>
     </button>
@@ -171,8 +174,8 @@ function MobileNav() {
       >
         <Menu className="size-5" />
       </SheetTrigger>
-      <SheetContent side="left" className="w-80 p-0">
-        <SheetHeader className="border-b border-slate-100 px-5 py-4">
+      <SheetContent side="left" className="w-80 p-0 dark:bg-slate-950">
+        <SheetHeader className="border-b border-slate-100 dark:border-slate-800 px-5 py-4">
           <SheetTitle>
             <BrandLogo />
           </SheetTitle>
@@ -183,7 +186,7 @@ function MobileNav() {
           aria-label="Mobile navigation"
         >
           {/* Products */}
-          <span className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+          <span className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">
             Products
           </span>
           <MobileLink href="/products/ai-analysis" label="AI Analysis" />
@@ -192,14 +195,14 @@ function MobileNav() {
           <MobileLink href="/products/watchlists" label="Watchlists" />
 
           {/* Solutions */}
-          <span className="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+          <span className="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">
             Solutions
           </span>
           <MobileLink href="/solutions/day-traders" label="For Day Traders" />
           <MobileLink href="/solutions/institutional" label="For Institutional Investors" />
 
           {/* Developers */}
-          <span className="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+          <span className="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">
             Developers
           </span>
           <MobileLink href="/developers/api" label="API Documentation" />
@@ -207,20 +210,20 @@ function MobileNav() {
           <MobileLink href="/developers/sandbox" label="Sandbox" />
 
           {/* Pricing */}
-          <span className="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+          <span className="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">
             General
           </span>
           <MobileLink href="/pricing" label="Pricing" />
         </nav>
 
-        <div className="mt-auto border-t border-slate-100 p-4 flex flex-col gap-2">
+        <div className="mt-auto border-t border-slate-100 dark:border-slate-800 p-4 flex flex-col gap-2">
           <Button
             variant="ghost"
-            className="w-full justify-center h-9 text-[13px] font-medium text-slate-700"
+            className="w-full justify-center h-9 text-[13px] font-medium text-slate-700 dark:text-slate-300"
           >
             Log In
           </Button>
-          <Button className="w-full justify-center h-9 text-[13px] font-medium bg-slate-900 text-white hover:bg-slate-800">
+          <Button className="w-full justify-center h-9 text-[13px] font-medium bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200">
             Sign Up
           </Button>
         </div>
@@ -233,7 +236,7 @@ function MobileLink({ href, label }: { href: string; label: string }) {
   return (
     <Link
       href={href}
-      className="flex items-center justify-between rounded-md px-3 py-2 text-[13px] font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+      className="flex items-center justify-between rounded-md px-3 py-2 text-[13px] font-medium text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800 transition-colors"
     >
       {label}
       <ChevronRight className="size-3 text-slate-400" />
@@ -248,7 +251,7 @@ export function Navbar() {
   return (
     <header
       id="main-navbar"
-      className="sticky top-0 z-50 w-full border-b border-slate-200/80 bg-white"
+      className="sticky top-0 z-50 w-full border-b border-slate-200/80 bg-white dark:border-slate-800 dark:bg-slate-950"
     >
       <div className="mx-auto flex h-14 max-w-7xl items-center px-4 sm:px-6 lg:px-8">
         {/* ---- Left: Brand ---- */}
@@ -259,7 +262,7 @@ export function Navbar() {
           <NavigationMenuList className="gap-0.5">
             {/* ── Products (2-Column Mega Menu) ── */}
             <NavigationMenuItem>
-              <NavigationMenuTrigger className="text-[13px] font-medium text-slate-700 hover:text-slate-900">
+              <NavigationMenuTrigger className="text-[13px] font-medium text-slate-700 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white">
                 Products
               </NavigationMenuTrigger>
               <NavigationMenuContent className="w-[460px] p-4">
@@ -294,7 +297,7 @@ export function Navbar() {
 
             {/* ── Solutions (Simple Dropdown) ── */}
             <NavigationMenuItem>
-              <NavigationMenuTrigger className="text-[13px] font-medium text-slate-700 hover:text-slate-900">
+              <NavigationMenuTrigger className="text-[13px] font-medium text-slate-700 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white">
                 Solutions
               </NavigationMenuTrigger>
               <NavigationMenuContent className="w-[220px] p-2">
@@ -315,7 +318,7 @@ export function Navbar() {
 
             {/* ── Developers (Simple Dropdown) ── */}
             <NavigationMenuItem>
-              <NavigationMenuTrigger className="text-[13px] font-medium text-slate-700 hover:text-slate-900">
+              <NavigationMenuTrigger className="text-[13px] font-medium text-slate-700 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white">
                 Developers
               </NavigationMenuTrigger>
               <NavigationMenuContent className="w-[220px] p-2">
@@ -346,7 +349,7 @@ export function Navbar() {
                 render={<Link href="/pricing" />}
                 className={navigationMenuTriggerStyle()}
               >
-                <span className="text-[13px] font-medium text-slate-700 hover:text-slate-900">
+                <span className="text-[13px] font-medium text-slate-700 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white">
                   Pricing
                 </span>
               </NavigationMenuLink>
@@ -363,11 +366,14 @@ export function Navbar() {
 
           {/* Mobile search icon fallback */}
           <button
-            className="inline-flex items-center justify-center size-8 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors md:hidden"
+            className="inline-flex items-center justify-center size-8 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-300 dark:hover:bg-slate-800 transition-colors md:hidden"
             aria-label="Search"
           >
             <Search className="size-4" />
           </button>
+
+          {/* Theme toggle */}
+          <ThemeToggle />
 
           {/* Desktop auth buttons */}
           <div className="hidden lg:flex items-center gap-2">
@@ -375,14 +381,14 @@ export function Navbar() {
               id="login-button"
               variant="ghost"
               size="sm"
-              className="text-[13px] font-medium text-slate-700 hover:text-slate-900"
+              className="text-[13px] font-medium text-slate-700 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
             >
               Log In
             </Button>
             <Button
               id="signup-button"
               size="sm"
-              className="text-[13px] font-medium bg-slate-900 text-white hover:bg-slate-800"
+              className="text-[13px] font-medium bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200"
             >
               Sign Up
             </Button>
