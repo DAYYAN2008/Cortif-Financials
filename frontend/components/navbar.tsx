@@ -128,7 +128,7 @@ function BrandLogo() {
       </div>
       {/* Wordmark */}
       <span className="text-[15px] font-bold tracking-tight text-slate-900">
-        AI FinTech
+        Cortif 
       </span>
     </Link>
   );
