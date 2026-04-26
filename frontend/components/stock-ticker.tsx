@@ -14,7 +14,10 @@ function StockCard({ stock }: { stock: StockData }) {
   const isNeutral = stock.change === 0;
 
   return (
-    <div className="flex items-center gap-2.5 rounded-md border border-border/60 bg-white/70 px-3.5 py-1.5 backdrop-blur-sm select-none shrink-0 dark:bg-slate-900/70 dark:border-slate-700/60">
+    <motion.div
+      whileHover={{ y: -5, scale: 1.02 }}
+      className="flex items-center gap-2.5 rounded-md border border-border/60 bg-white/70 px-3.5 py-1.5 backdrop-blur-sm select-none shrink-0 dark:bg-slate-900/70 dark:border-slate-700/60"
+    >
       {/* Symbol */}
       <span className="text-[11px] font-semibold tracking-wide text-foreground/90 uppercase">
         {stock.symbol}
@@ -51,7 +54,7 @@ function StockCard({ stock }: { stock: StockData }) {
         {isPositive ? "+" : ""}
         {stock.change.toFixed(2)}%
       </span>
-    </div>
+    </motion.div>
   );
 }
 
@@ -65,7 +68,6 @@ interface StockTickerProps {
 
 export function StockTicker({ stocks: initialStocks = MOCK_STOCKS }: StockTickerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [duration, setDuration] = useState(40);
   const [stocks, setStocks] = useState<StockData[]>(initialStocks);
   const [isConnected, setIsConnected] = useState(false);
 
@@ -80,8 +82,15 @@ export function StockTicker({ stocks: initialStocks = MOCK_STOCKS }: StockTicker
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        if (Array.isArray(data)) {
-          setStocks(data);
+        if (Array.isArray(data) && data.length > 0) {
+          let liveStocks = [...data];
+          // Virtual Looper: If less than 20 symbols, pad the array to > 25 to prevent marquee gaps
+          if (liveStocks.length < 20) {
+            while (liveStocks.length <= 25) {
+              liveStocks = [...liveStocks, ...data];
+            }
+          }
+          setStocks(liveStocks);
         }
       } catch (error) {
         console.error("Error parsing WebSocket data:", error);
@@ -98,14 +107,7 @@ export function StockTicker({ stocks: initialStocks = MOCK_STOCKS }: StockTicker
     };
   }, []);
 
-  // Adjust scroll speed based on content width for consistent perceived speed
-  useEffect(() => {
-    if (containerRef.current) {
-      const contentWidth = containerRef.current.scrollWidth / 2;
-      // ~60px per second
-      setDuration(Math.max(25, contentWidth / 60));
-    }
-  }, [stocks.length]);
+
 
   // Duplicate the list for seamless looping
   const tickerItems = [...stocks, ...stocks];
@@ -113,11 +115,11 @@ export function StockTicker({ stocks: initialStocks = MOCK_STOCKS }: StockTicker
   return (
     <div
       id="stock-ticker"
-      className="relative w-full overflow-hidden border-b border-border/40 bg-[#f8f9fa] dark:bg-slate-900/50 flex items-center"
+      className="relative w-full overflow-hidden border-b border-border/40 bg-[#f8f9fa] dark:bg-[#020617] flex items-center"
       aria-label="Live stock ticker"
     >
       {/* Live Indicator inside the fade edge */}
-      <div className="absolute left-0 z-20 flex items-center h-full px-4 bg-gradient-to-r from-[#f8f9fa] via-[#f8f9fa] to-transparent dark:from-slate-950 dark:via-slate-950">
+      <div className="absolute left-0 z-20 flex items-center h-full px-4 bg-gradient-to-r from-[#f8f9fa] via-[#f8f9fa] to-transparent dark:from-[#020617] dark:via-[#020617]">
         <div className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-white border border-slate-200 shadow-sm dark:bg-slate-800 dark:border-slate-700">
           <span className="relative flex size-2">
             {isConnected && (
@@ -135,25 +137,16 @@ export function StockTicker({ stocks: initialStocks = MOCK_STOCKS }: StockTicker
         </div>
       </div>
 
-      <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-12 bg-gradient-to-l from-[#f8f9fa] to-transparent dark:from-slate-950" />
+      <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-12 bg-gradient-to-l from-[#f8f9fa] to-transparent dark:from-[#020617]" />
 
-      <motion.div
+      <div
         ref={containerRef}
-        className="flex items-center gap-3 py-2 px-4 will-change-transform ml-24"
-        animate={{ x: ["0%", "-50%"] }}
-        transition={{
-          x: {
-            repeat: Infinity,
-            repeatType: "loop",
-            duration,
-            ease: "linear",
-          },
-        }}
+        className="flex items-center gap-3 py-2 px-4 will-change-transform transform-gpu animate-marquee hover:[animation-play-state:paused] ml-24"
       >
         {tickerItems.map((stock, i) => (
           <StockCard key={`${stock.symbol}-${i}`} stock={stock} />
         ))}
-      </motion.div>
+      </div>
     </div>
   );
 }
