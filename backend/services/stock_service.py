@@ -11,14 +11,16 @@ _session = requests.Session()
 METADATA_CACHE_TTL = 3600
 
 # Minimum of 40 symbols: Mix of NASDAQ, Crypto, and KSE-100
+# Updated list with .PSX suffixes and corrected POL symbol
 DEFAULT_SYMBOLS = [
     # NASDAQ / NYSE
     "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "TSLA", "META", "NFLX", "AMD", "INTC", 
     "CSCO", "PEP", "AVGO", "TXN", "QCOM", "COST", "SBUX", "AMGN", "DIS", "BA",
     # Crypto
-    "BTC-USD", "ETH-USD", "SOL-USD", "XRP-USD", "ADA-USD", "DOGE-USD", "DOT-USD", "MATIC-USD", "LINK-USD",
-    # KSE-100
-    "ENGRO.KA", "HUBC.KA", "LUCK.KA", "OGDC.KA", "PPL.KA", "MCB.KA", "UBL.KA", "HBL.KA", "SYS.KA", "TRG.KA", "MEBL.KA", "PSO.KA",
+    "BTC-USD", "ETH-USD", "SOL-USD", "XRP-USD", "ADA-USD", "DOGE-USD", "DOT-USD", "LINK-USD",
+    # KSE-100 (Updated from .KA to .PSX)
+    "EFERT.PSX", "HUBC.PSX", "LUCK.PSX", "OGDC.PSX", "PPL.PSX", "MCB.PSX", 
+    "UBL.PSX", "HBL.PSX", "SYS.PSX", "TRG.PSX", "MEBL.PSX", "PSO.PSX", "POL.PSX",
     # ETFs
     "SPY", "QQQ"
 ]
@@ -32,6 +34,12 @@ class StockService:
             "current_duration": 10,
             "fail_count": 0
         }
+
+    def _sanitize_symbol(self, symbol: str) -> str:
+        """Strip Cashtags, whitespace and normalize case."""
+        if not symbol:
+            return ""
+        return symbol.lstrip('$').strip().upper()
 
     def _fetch_single_backup(self, symbol: str) -> Dict:
         """Helper for parallel backup fetching."""
@@ -91,6 +99,9 @@ class StockService:
                 # Ensure we return a list of all cached symbols
                 return list(self.cache.values())
 
+        # Priority: Sanitize all input symbols immediately
+        symbols = [self._sanitize_symbol(s) for s in symbols if s]
+
         results = []
         logger.info(f"Fetching market data (Refresh Rate: {self.adaptive_state['current_duration']}s)")
         
@@ -108,7 +119,8 @@ class StockService:
             )
             
             if data.empty:
-                raise ValueError("yfinance returned empty data (potential block)")
+                # If entire batch is empty, it's likely a block/rate-limit
+                raise ValueError("yfinance returned empty data (potential block/rate-limit)")
 
             missing_symbols = []
 
@@ -195,25 +207,34 @@ class StockService:
                     self.adaptive_state["last_updated"] = current_time
                 
         except Exception as e:
-            logger.warning(f"Primary source failed: {e}. Switching to adaptive backup...")
-            self.adaptive_state["fail_count"] += 1
-            # Exponential backoff: 10s -> 20s -> 40s -> 80s -> ... max 5 mins
-            self.adaptive_state["current_duration"] = min(300, 10 * (2 ** self.adaptive_state["fail_count"]))
+            error_str = str(e).lower()
+            # Only trigger backoff if it's a known blocking error or total failure
+            is_blocking = any(code in error_str for code in ["429", "403", "forbidden", "too many requests", "rate-limit"])
             
-            # Try Backup Source immediately
-            backup_results = self._fetch_from_backup(symbols)
+            if is_blocking or not results:
+                logger.warning(f"Primary source blocked or failed: {e}. Incrementing adaptive backoff...")
+                self.adaptive_state["fail_count"] += 1
+                self.adaptive_state["current_duration"] = min(300, 10 * (2 ** self.adaptive_state["fail_count"]))
+            else:
+                logger.warning(f"Primary source had partial failure: {e}. Skipping backoff increase.")
             
-            backup_dict = {res["symbol"]: res for res in backup_results}
-            for symbol in symbols:
-                clean_symbol = symbol.split('-')[0] if '-' in symbol else symbol
-                if clean_symbol in backup_dict:
-                    res = backup_dict[clean_symbol]
-                    results.append(res)
-                    self.cache[symbol] = res
-                elif symbol in self.cache:
-                    lkg = self.cache[symbol].copy()
-                    lkg["stale"] = True
-                    results.append(lkg)
+            # Try Backup Source immediately for symbols not in results
+            already_fetched = {res["symbol"] for res in results}
+            remaining_symbols = [s for s in symbols if s.split('-')[0] not in already_fetched]
+            
+            if remaining_symbols:
+                backup_results = self._fetch_from_backup(remaining_symbols)
+                backup_dict = {res["symbol"]: res for res in backup_results}
+                for symbol in remaining_symbols:
+                    clean_symbol = symbol.split('-')[0] if '-' in symbol else symbol
+                    if clean_symbol in backup_dict:
+                        res = backup_dict[clean_symbol]
+                        results.append(res)
+                        self.cache[symbol] = res
+                    elif symbol in self.cache:
+                        lkg = self.cache[symbol].copy()
+                        lkg["stale"] = True
+                        results.append(lkg)
             
             if results and is_default:
                 self.adaptive_state["last_updated"] = current_time
