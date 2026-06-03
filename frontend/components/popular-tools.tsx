@@ -1,9 +1,12 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/utils/supabase/client";
 import { 
   ChevronLeft, 
   ChevronRight, 
+  Loader2,
   Calculator,
   TrendingUp,
   Scissors,
@@ -18,21 +21,42 @@ import {
 } from "lucide-react";
 
 const tools = [
-  { name: "ROI Calculator", icon: Calculator },
-  { name: "CAGR", icon: TrendingUp },
-  { name: "Deduction", icon: Scissors },
-  { name: "SIP", icon: PiggyBank },
-  { name: "X-Rate", icon: ArrowRightLeft },
-  { name: "Drawdown", icon: TrendingDown },
-  { name: "Inflation", icon: Flame },
-  { name: "Leverage", icon: Scale },
-  { name: "Margin", icon: PieChart },
-  { name: "Pip Value", icon: Ruler },
-  { name: "Pivot Point", icon: Target },
+  { id: "roi", name: "ROI Calculator", icon: Calculator },
+  { id: "cagr", name: "CAGR", icon: TrendingUp },
+  { id: "deduction", name: "Deduction", icon: Scissors },
+  { id: "sip", name: "SIP", icon: PiggyBank },
+  { id: "x-rate", name: "X-Rate", icon: ArrowRightLeft },
+  { id: "drawdown", name: "Drawdown", icon: TrendingDown },
+  { id: "inflation", name: "Inflation", icon: Flame },
+  { id: "leverage", name: "Leverage", icon: Scale },
+  { id: "margin", name: "Margin", icon: PieChart },
+  { id: "pip-value", name: "Pip Value", icon: Ruler },
+  { id: "pivot-point", name: "Pivot Point", icon: Target },
 ];
 
 export function PopularTools() {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
+  const supabase = createClient();
+  const [loadingId, setLoadingId] = useState<string | null>(null);
+
+  const handleToolClick = async (toolId: string) => {
+    if (loadingId) return;
+    setLoadingId(toolId);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        router.push(`/dashboard/tools/${toolId}`);
+      } else {
+        router.push(`/login?redirectTo=/dashboard/tools/${toolId}`);
+      }
+    } catch (e) {
+      console.error(e);
+      router.push(`/login?redirectTo=/dashboard/tools/${toolId}`);
+    } finally {
+      setLoadingId(null);
+    }
+  };
 
   const scrollLeft = () => {
     if (scrollRef.current) {
@@ -80,7 +104,8 @@ export function PopularTools() {
           {tools.map((tool, idx) => (
             <div
               key={idx}
-              className="snap-start shrink-0 w-72 h-64 bg-card border border-border rounded-2xl flex flex-col items-center justify-center p-6 cursor-pointer group transition-all duration-200 ease-[cubic-bezier(0.25,0.1,0.25,1.0)] hover:-translate-y-3 hover:border-primary/20 hover:ring-2 hover:ring-primary/10 hover:shadow-[0_4px_15px_rgba(0,0,0,0.05)] dark:hover:border-border dark:hover:ring-0 dark:hover:shadow-black/50"
+              onClick={() => handleToolClick(tool.id)}
+              className={`snap-start shrink-0 w-72 h-64 bg-card border border-border rounded-2xl flex flex-col items-center justify-center p-6 cursor-pointer group transition-all duration-200 ease-[cubic-bezier(0.25,0.1,0.25,1.0)] hover:-translate-y-3 hover:border-primary/20 hover:ring-2 hover:ring-primary/10 hover:shadow-[0_4px_15px_rgba(0,0,0,0.05)] dark:hover:border-border dark:hover:ring-0 dark:hover:shadow-black/50 ${loadingId === tool.id ? 'opacity-50 pointer-events-none' : ''}`}
             >
               {/* Circular Graphic Enclosing Icon */}
               <div className="relative mb-6 flex items-center justify-center">
@@ -89,7 +114,11 @@ export function PopularTools() {
                 
                 {/* Inner Icon Background Container */}
                 <div className="w-16 h-16 rounded-full bg-primary/5 group-hover:bg-primary/10 flex items-center justify-center text-primary transition-colors duration-300">
-                  <tool.icon className="w-8 h-8" strokeWidth={1.5} />
+                  {loadingId === tool.id ? (
+                    <Loader2 className="w-8 h-8 animate-spin" />
+                  ) : (
+                    <tool.icon className="w-8 h-8" strokeWidth={1.5} />
+                  )}
                 </div>
               </div>
               

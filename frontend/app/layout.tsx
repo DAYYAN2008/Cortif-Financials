@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, Geist_Mono } from "next/font/google";
-import { Header } from "@/components/header";
-import { Footer } from "@/components/footer";
 import { ThemeProvider } from "@/components/theme-provider";
+import { LayoutShell } from "@/components/layout-shell";
 import "./globals.css";
 
 const inter = Inter({
@@ -40,11 +39,10 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <Header />
-          <main className="flex-1">{children}</main>
-          <Footer />
+          <LayoutShell>{children}</LayoutShell>
         </ThemeProvider>
       </body>
     </html>
   );
 }
+

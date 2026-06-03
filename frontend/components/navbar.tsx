@@ -22,6 +22,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
+import { createClient } from "@/utils/supabase/client";
+import type { User } from "@supabase/supabase-js";
 import {
   Sheet,
   SheetTrigger,
@@ -293,7 +295,7 @@ function CommandKSearch() {
 /* ------------------------------------------------------------------ */
 /*  Mobile Navigation Sheet                                            */
 /* ------------------------------------------------------------------ */
-function MobileNav() {
+function MobileNav({ user, loading }: { user: User | null; loading: boolean }) {
   return (
     <Sheet>
       <SheetTrigger
@@ -352,15 +354,44 @@ function MobileNav() {
         </nav>
 
         <div className="mt-auto border-t border-slate-100 dark:border-slate-800 p-4 flex flex-col gap-2">
-          <Button
-            variant="ghost"
-            className="w-full justify-center h-9 text-[13px] font-medium text-slate-700 dark:text-slate-300"
-          >
-            Log In
-          </Button>
-          <Button className="w-full justify-center h-9 text-[13px] font-medium bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200">
-            Sign Up
-          </Button>
+          {!loading && (
+            user ? (
+              <>
+                <Button
+                  variant="ghost"
+                  className="w-full justify-center h-9 text-[13px] font-medium text-slate-700 dark:text-slate-300 cursor-pointer"
+                  onClick={async () => {
+                    const supabase = createClient();
+                    await supabase.auth.signOut();
+                  }}
+                >
+                  Log Out
+                </Button>
+                <Button 
+                  className="w-full justify-center h-9 text-[13px] font-medium bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200 cursor-pointer"
+                  render={<Link href="/dashboard" />}
+                >
+                  Go to Dashboard
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  variant="ghost"
+                  className="w-full justify-center h-9 text-[13px] font-medium text-slate-700 dark:text-slate-300"
+                  render={<Link href="/login" />}
+                >
+                  Log In
+                </Button>
+                <Button 
+                  className="w-full justify-center h-9 text-[13px] font-medium bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200"
+                  render={<Link href="/login" />}
+                >
+                  Sign Up
+                </Button>
+              </>
+            )
+          )}
         </div>
       </SheetContent>
     </Sheet>
@@ -396,6 +427,28 @@ function MobileLink({ href, label }: { href?: string; label: string }) {
 /*  Main Navbar Export                                                  */
 /* ------------------------------------------------------------------ */
 export function Navbar() {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const supabase = createClient();
+    
+    supabase.auth.getUser().then(({ data }) => {
+      setUser(data.user);
+      setLoading(false);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        setUser(session?.user ?? null);
+      }
+    );
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
   return (
     <header
       id="main-navbar"
@@ -535,25 +588,54 @@ export function Navbar() {
 
           {/* Desktop auth buttons */}
           <div className="hidden lg:flex items-center gap-2">
-            <Button
-              id="login-button"
-              variant="ghost"
-              size="sm"
-              className="text-[13px] font-medium text-slate-700 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white cursor-pointer"
-            >
-              Log In
-            </Button>
-            <Button
-              id="signup-button"
-              size="sm"
-              className="text-[13px] font-medium bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200 cursor-pointer"
-            >
-              Sign Up
-            </Button>
+            {!loading && (
+              user ? (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-[13px] font-medium text-slate-700 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white cursor-pointer"
+                    onClick={async () => {
+                      const supabase = createClient();
+                      await supabase.auth.signOut();
+                    }}
+                  >
+                    Log Out
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="text-[13px] font-medium bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200 cursor-pointer"
+                    render={<Link href="/dashboard" />}
+                  >
+                    Go to Dashboard
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    id="login-button"
+                    variant="ghost"
+                    size="sm"
+                    className="text-[13px] font-medium text-slate-700 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white cursor-pointer"
+                    render={<Link href="/login" />}
+                  >
+                    Log In
+                  </Button>
+                  <Button
+                    id="signup-button"
+                    size="sm"
+                    className="text-[13px] font-medium bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200 cursor-pointer"
+                    render={<Link href="/login" />}
+                  >
+                    Sign Up
+                  </Button>
+                </>
+              )
+            )}
           </div>
 
           {/* Mobile hamburger */}
-          <MobileNav />
+          <MobileNav user={user} loading={loading} />
         </div>
       </div>
     </header>

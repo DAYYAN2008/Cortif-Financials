@@ -2,8 +2,10 @@ import asyncio
 import random
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
+
+from dependencies import get_current_user, get_supabase_client
 
 from services.news_service import sync_external_news, get_latest_news
 from services.stock_service import get_authentic_stock_data
@@ -107,5 +109,24 @@ async def trigger_news_sync():
     try:
         result = sync_external_news()
         return result
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+# ── Auth Routes ──────────────────────────────────────────────────────────────
+
+@app.get("/api/v1/auth/me")
+async def get_my_profile(user_id: str = Depends(get_current_user)):
+    """
+    Returns the current authenticated user's profile from the database.
+    """
+    supabase = get_supabase_client()
+    try:
+        result = supabase.table("profiles").select("*").eq("id", user_id).execute()
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Profile not found")
+        return {"user_id": user_id, "profile": result.data[0]}
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
