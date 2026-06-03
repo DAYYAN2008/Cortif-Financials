@@ -42,7 +42,7 @@ const toolsList = [
     name: "Tax Deduction",
     description: "Estimate your tax liabilities and potential deductions for the fiscal year.",
     icon: Scissors,
-    href: "/dashboard/tools/deduction",
+    href: "/dashboard/tools/tax",
     color: "text-rose-500 dark:text-rose-400",
     bg: "bg-rose-500/10 dark:bg-rose-500/20"
   },
