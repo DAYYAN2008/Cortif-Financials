@@ -72,9 +72,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+import os
+origins_str = os.getenv("CORS_ORIGINS", "http://localhost:3000")
+origins = [origin.strip() for origin in origins_str.split(",") if origin.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"], # Your Next.js URL
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -171,3 +175,7 @@ async def get_my_profile(user_id: str = Depends(get_current_user)):
         raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
