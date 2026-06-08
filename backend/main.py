@@ -9,6 +9,8 @@ from dependencies import get_current_user, get_supabase_client
 
 from services.news_service import sync_external_news, get_latest_news
 from services.stock_service import get_authentic_stock_data
+from services.redis_service import market_data_sync_loop, market_broadcast_loop, redis_client
+from services.websocket_manager import manager
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("cortif_backend")
@@ -38,14 +40,30 @@ async def _news_sync_loop() -> None:
 async def lifespan(application: FastAPI):
     """
     Modern FastAPI lifespan handler.
-    Spawns the news-sync background task on startup and
-    cancels it on shutdown.
+    Spawns background tasks on startup and cancels on shutdown.
     """
-    task = asyncio.create_task(_news_sync_loop())
+    news_task = asyncio.create_task(_news_sync_loop())
     logger.info("🚀 News sync background task started (interval=%ds)", NEWS_SYNC_INTERVAL)
+    
+    market_data_task = asyncio.create_task(market_data_sync_loop())
+    logger.info("🚀 Market data sync background task started (interval=5s)")
+    
+    broadcast_task = asyncio.create_task(market_broadcast_loop())
+    logger.info("🚀 Market broadcast loop started (interval=1s)")
+    
     yield
-    task.cancel()
+    
+    news_task.cancel()
     logger.info("🛑 News sync background task stopped")
+    
+    market_data_task.cancel()
+    logger.info("🛑 Market data sync background task stopped")
+    
+    broadcast_task.cancel()
+    logger.info("🛑 Market broadcast loop stopped")
+    
+    await redis_client.aclose()
+    logger.info("🛑 Redis connection closed")
 
 
 app = FastAPI(
@@ -83,6 +101,29 @@ async def websocket_endpoint(websocket: WebSocket):
             await asyncio.sleep(random.uniform(2, 5))
     except WebSocketDisconnect:
         print("Client disconnected")
+
+
+# ── Market Data WebSocket (Redis → Frontend) ────────────────────────────────
+
+@app.websocket("/ws/markets")
+async def websocket_markets(websocket: WebSocket):
+    """
+    WebSocket endpoint for real-time market data.
+    
+    Clients connect here and receive automatic broadcasts
+    every 1 second from the market_broadcast_loop which
+    reads directly from the Redis cache.
+    """
+    await manager.connect(websocket)
+    try:
+        # Keep connection alive — listen for client pings/messages
+        while True:
+            # Wait for any message (ping/pong keepalive)
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+    except Exception:
+        manager.disconnect(websocket)
 
 
 # ── News Hub Routes ─────────────────────────────────────────────────────────

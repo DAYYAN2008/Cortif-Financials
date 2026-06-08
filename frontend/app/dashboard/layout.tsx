@@ -3,8 +3,9 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import {
   DashboardSidebar,
-  DashboardMobileTabs,
+  DashboardMobileNav,
 } from "@/components/dashboard/sidebar";
+import { AddAssetModal } from "@/components/modals/add-asset-modal";
 
 export const metadata: Metadata = {
   title: "Dashboard — Cortif",
@@ -49,14 +50,15 @@ export default async function DashboardLayout({
 
       {/* Main content area */}
       <div className="flex flex-1 flex-col min-w-0 overflow-hidden">
-        {/* Scrollable content */}
-        <div className="flex-1 overflow-y-auto pb-20 lg:pb-0">
+        {/* Mobile Top Header */}
+        <DashboardMobileNav />
+        <div className="flex-1 overflow-y-auto pb-6 lg:pb-0">
           {children}
         </div>
-
-        {/* Mobile bottom tabs */}
-        <DashboardMobileTabs />
       </div>
+
+      {/* Global Modals */}
+      <AddAssetModal />
     </div>
   );
 }
