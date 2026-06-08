@@ -177,7 +177,6 @@ function LoginContent() {
 
 
   const [email, setEmail] = useState("");
-  const [otpCode, setOtpCode] = useState("");
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
   const [otpSent, setOtpSent] = useState(false);
   const [error, setError] = useState<string | null>(
@@ -231,27 +230,6 @@ function LoginContent() {
     setLoadingProvider(null);
   }
 
-  /* ── Verify OTP Handler ── */
-  async function handleVerifyOtp(e: React.FormEvent) {
-    e.preventDefault();
-    if (otpCode.length !== 6) return;
-
-    setError(null);
-    setLoadingProvider("verify");
-
-    const { error } = await supabase.auth.verifyOtp({
-      email: email.trim(),
-      token: otpCode,
-      type: "email",
-    });
-
-    if (error) {
-      setError(error.message);
-      setLoadingProvider(null);
-    } else {
-      router.push(redirectToParam || "/");
-    }
-  }
 
   return (
     <div className="relative flex min-h-[calc(100vh-8rem)] items-center justify-center px-4 py-12">
@@ -293,9 +271,9 @@ function LoginContent() {
 
           <AnimatePresence mode="wait">
             {otpSent ? (
-              /* ── OTP Verification State ── */
+              /* ── Magic Link Sent State ── */
               <motion.div
-                key="otp-verify"
+                key="magic-link-sent"
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
@@ -307,80 +285,25 @@ function LoginContent() {
                 </div>
                 <div className="text-center w-full">
                   <p className="text-[15px] font-semibold text-slate-900 dark:text-white">
-                    Enter Verification Code
+                    Check your email
                   </p>
                   <p className="mt-1.5 text-[13px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                    We sent a 6-digit code to{" "}
+                    We sent a magic link to{" "}
                     <span className="font-medium text-slate-700 dark:text-slate-300">
                       {email}
                     </span>
+                    <br />
+                    Click the link to sign in automatically.
                   </p>
                 </div>
-
-                <form onSubmit={handleVerifyOtp} className="flex flex-col gap-3 w-full mt-2">
-                  {error && (
-                    <div className="flex items-start gap-2.5 rounded-lg border border-red-200 bg-red-50 px-3.5 py-3 dark:border-red-500/20 dark:bg-red-500/10">
-                      <AlertCircle className="mt-0.5 size-4 shrink-0 text-red-600 dark:text-red-400" />
-                      <p className="text-[13px] text-red-700 dark:text-red-300 leading-snug">
-                        {error}
-                      </p>
-                    </div>
-                  )}
-
-                  <input
-                    id="otp-input"
-                    type="text"
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    maxLength={6}
-                    value={otpCode}
-                    onChange={(e) => {
-                      const val = e.target.value.replace(/[^0-9]/g, "");
-                      setOtpCode(val);
-                    }}
-                    placeholder="000000"
-                    required
-                    className={cn(
-                      "w-full rounded-xl border py-3 text-center text-2xl tracking-[0.5em] font-mono",
-                      "placeholder:text-slate-300 dark:placeholder:text-slate-600",
-                      "border-slate-200 bg-white text-slate-900 transition-all duration-200",
-                      "hover:border-slate-300 focus:border-slate-400 focus:ring-2 focus:ring-slate-200",
-                      "dark:border-slate-700/60 dark:bg-slate-800/50 dark:text-slate-200",
-                      "dark:hover:border-slate-600 dark:focus:border-slate-500 dark:focus:ring-slate-700/50",
-                      "focus:outline-none"
-                    )}
-                  />
-                  
-                  <motion.button
-                    type="submit"
-                    disabled={loadingProvider === "verify" || otpCode.length !== 6}
-                    whileHover={{ scale: 1.01 }}
-                    whileTap={{ scale: 0.985 }}
-                    className={cn(
-                      "flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 mt-1",
-                      "text-[14px] font-medium transition-all duration-200 cursor-pointer",
-                      "bg-slate-900 text-white hover:bg-slate-800",
-                      "dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100",
-                      "disabled:opacity-50 disabled:cursor-not-allowed",
-                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-950"
-                    )}
-                  >
-                    {loadingProvider === "verify" ? (
-                      <Loader2 className="size-4 animate-spin" />
-                    ) : (
-                      "Verify & Sign In"
-                    )}
-                  </motion.button>
-                </form>
 
                 <button
                   type="button"
                   onClick={() => {
                     setOtpSent(false);
-                    setOtpCode("");
                     setError(null);
                   }}
-                  className="mt-2 text-[13px] font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors cursor-pointer"
+                  className="mt-4 text-[13px] font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors cursor-pointer"
                 >
                   Back to Email Entry
                 </button>

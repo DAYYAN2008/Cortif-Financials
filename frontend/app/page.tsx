@@ -1,4 +1,6 @@
 import { FeaturedNewsCarousel } from "@/components/featured-news-carousel";
+import { MarketOverview } from "@/components/market-overview";
+import { MarketCarousel } from "@/components/market-carousel";
 import { PopularTools } from "@/components/popular-tools";
 import type { NewsArticle } from "@/types/news";
 
@@ -29,7 +31,7 @@ export default async function Home() {
       <FeaturedNewsCarousel articles={articles} />
 
       {/* ── Remaining page content ── */}
-      <div className="flex flex-col items-center justify-center min-h-[40vh] px-4 mt-8">
+      <div className="flex flex-col items-center justify-center min-h-[30vh] px-4 mt-8">
         <div className="max-w-2xl text-center">
           <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-foreground mb-4">
             AI-Powered Financial Intelligence
@@ -40,6 +42,10 @@ export default async function Home() {
           </p>
         </div>
       </div>
+
+      {/* ── Market Asset Previews ── */}
+      <MarketOverview />
+      <MarketCarousel />
 
       {/* ── Popular Tools Section ── */}
       <PopularTools />

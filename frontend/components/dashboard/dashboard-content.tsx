@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/utils/currency";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 
 /* ------------------------------------------------------------------ */
 /*  Stat Card                                                          */
@@ -342,7 +343,15 @@ function RecentActivity() {
 /*  Dashboard Content Shell                                            */
 /* ------------------------------------------------------------------ */
 export function DashboardContent({ baseCurrency }: { baseCurrency: string }) {
-  const [isAddAssetOpen, setIsAddAssetOpen] = useState(false);
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const openAddAssetModal = () => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("modal", "add-asset");
+    router.push(`${pathname}?${params.toString()}`);
+  };
 
   return (
     <>
@@ -408,57 +417,13 @@ export function DashboardContent({ baseCurrency }: { baseCurrency: string }) {
         {/* ── Holdings + Activity Grid ── */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2">
-            <EmptyHoldingsTable onAddAssetClick={() => setIsAddAssetOpen(true)} />
+            <EmptyHoldingsTable onAddAssetClick={openAddAssetModal} />
           </div>
           <div>
             <RecentActivity />
           </div>
         </div>
       </div>
-
-      {/* ── Add Asset Modal Overlay ── */}
-      <AnimatePresence>
-        {isAddAssetOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            {/* Backdrop */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsAddAssetOpen(false)}
-              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm dark:bg-black/80"
-            />
-
-            {/* Modal Card */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 8 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 8 }}
-              transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-              className="relative w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900 z-10"
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800/60 mb-6">
-                <h3 className="text-base font-semibold text-slate-900 dark:text-white">
-                  Add Transaction Ledger Entry
-                </h3>
-                <button
-                  onClick={() => setIsAddAssetOpen(false)}
-                  className="flex items-center justify-center size-8 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                  aria-label="Close modal"
-                >
-                  <X className="size-4" />
-                </button>
-              </div>
-
-              {/* Form Body Placeholder */}
-              <div className="min-h-[120px] flex items-center justify-center text-slate-400 dark:text-slate-500">
-                <p className="text-[13px]">Transaction entry fields will be rendered here.</p>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
     </>
   );
 }
