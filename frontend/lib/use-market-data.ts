@@ -40,7 +40,8 @@ interface UseMarketDataReturn {
 /* ------------------------------------------------------------------ */
 /*  WebSocket Config                                                    */
 /* ------------------------------------------------------------------ */
-const WS_URL = "ws://127.0.0.1:8000/ws/markets";
+const WS_BASE_URL = process.env.NEXT_PUBLIC_WS_URL || "ws://127.0.0.1:8000";
+const WS_URL = `${WS_BASE_URL}/ws/markets`;
 const RECONNECT_DELAY_MS = 3000; // 3 seconds between reconnection attempts
 const MAX_RECONNECT_ATTEMPTS = 10;
 
