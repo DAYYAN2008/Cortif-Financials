@@ -1,0 +1,7 @@
+venv/
+__pycache__/
+*.pyc
+.env
+.env.local
+.vercel/
+Redis-x64.zip
