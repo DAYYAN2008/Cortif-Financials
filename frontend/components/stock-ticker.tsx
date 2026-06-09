@@ -61,6 +61,8 @@ function StockCard({ stock }: { stock: StockData }) {
 /* ------------------------------------------------------------------ */
 /*  StockTicker — infinite scrolling marquee                          */
 /* ------------------------------------------------------------------ */
+const WS_BASE_URL = process.env.NEXT_PUBLIC_WS_URL || "ws://127.0.0.1:8000";
+
 interface StockTickerProps {
   /** Pass live stock data here; falls back to mock data. */
   stocks?: StockData[];
@@ -73,7 +75,7 @@ export function StockTicker({ stocks: initialStocks = MOCK_STOCKS }: StockTicker
 
   // Initialize WebSocket connection
   useEffect(() => {
-    const ws = new WebSocket("ws://localhost:8000/ws/ticker");
+    const ws = new WebSocket(`${WS_BASE_URL}/ws/ticker`);
 
     ws.onopen = () => {
       setIsConnected(true);
