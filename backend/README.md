@@ -1,8 +1,8 @@
 ---
 title: Cortif Backend Terminal
 emoji: 📈
-colorFrom: slate
-colorTo: emerald
+colorFrom: gray
+colorTo: green
 sdk: docker
 app_file: main.py
 pinned: false
