@@ -6,6 +6,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, HTTPExceptio
 from fastapi.middleware.cors import CORSMiddleware
 
 from dependencies import get_current_user, get_supabase_client
+from routers.portfolio import router as portfolio_router
 
 from services.news_service import sync_external_news, get_latest_news
 from services.stock_service import get_authentic_stock_data
@@ -83,6 +84,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── Routers ────────────────────────────────────────────────────────────────
+app.include_router(portfolio_router)
 
 @app.get("/")
 def read_root():
