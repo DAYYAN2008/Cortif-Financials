@@ -50,10 +50,7 @@ async def poll_yahoo_finance():
                 async with redis_client.pipeline(transaction=True) as pipe:
                     for ticker, data in stock_data.items():
                         pipe.hset("market:stocks", ticker, json.dumps(data))
-<<<<<<< HEAD
                     pipe.expire("market:stocks", 120)  # 2-min TTL: auto-expire if poller crashes
-=======
->>>>>>> c6dcdb38b59498ccd9a623d53cc349fa5618104a
                     await pipe.execute()
                 logger.info("📈 Stock market data updated from Yahoo Finance")
         except redis.ConnectionError:
@@ -102,11 +99,8 @@ async def listen_binance_ws():
                                 pipe.hset("market:crypto", sym, json.dumps(d))
                             for sym, d in forex_data.items():
                                 pipe.hset("market:forex", sym, json.dumps(d))
-<<<<<<< HEAD
                             pipe.expire("market:crypto", 30)  # 30s TTL: real-time source
                             pipe.expire("market:forex", 30)
-=======
->>>>>>> c6dcdb38b59498ccd9a623d53cc349fa5618104a
                             await pipe.execute()
         except websockets.ConnectionClosed:
             logger.warning("⚠️ Binance WebSocket connection closed, reconnecting in 5s...")
@@ -159,10 +153,7 @@ async def get_market_snapshot() -> dict:
     return {
         "stocks": stocks,
         "forex": forex,
-<<<<<<< HEAD
-=======
         "commodities": crypto, # Map crypto to commodities key for now
->>>>>>> c6dcdb38b59498ccd9a623d53cc349fa5618104a
         "crypto": crypto,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
