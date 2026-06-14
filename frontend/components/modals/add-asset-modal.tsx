@@ -6,9 +6,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, Loader2, AlertCircle } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 
-/* ------------------------------------------------------------------ */
-/* Types                                                             */
-/* ------------------------------------------------------------------ */
 type TransactionType = "buy" | "sell";
 type AssetType = "stock" | "crypto" | "commodity";
 
@@ -18,15 +15,23 @@ const ASSET_TYPES: { value: AssetType; label: string; icon: string }[] = [
   { value: "commodity", label: "Commodity", icon: "🪙" },
 ];
 
+// Local backup catalog to ensure search dropdown works instantly if the backend endpoint is offline
+const LOCAL_ASSET_CATALOG = [
+  { ticker: "BTC", name: "Bitcoin", asset_type: "crypto" },
+  { ticker: "ETH", name: "Ethereum", asset_type: "crypto" },
+  { ticker: "LUCK", name: "Lucky Cement", asset_type: "stock" },
+  { ticker: "AAPL", name: "Apple Inc.", asset_type: "stock" },
+  { ticker: "NVDA", name: "NVIDIA Corp.", asset_type: "stock" },
+  { ticker: "TSLA", name: "Tesla Inc.", asset_type: "stock" },
+  { ticker: "GOLD", name: "Gold (XAU)", asset_type: "commodity" },
+];
+
 const BACKEND_URL =
   process.env.NEXT_PUBLIC_BACKEND_URL ?? "https://dayyanyasir-cortif-backend.hf.space";
 
 const inputClass =
   "w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-white transition-all";
 
-/* ------------------------------------------------------------------ */
-/* Modal Content                                                     */
-/* ------------------------------------------------------------------ */
 function AddAssetModalContent() {
   const router = useRouter();
   const pathname = usePathname();
@@ -74,9 +79,9 @@ function AddAssetModalContent() {
     }
   }, [isOpen]);
 
-  /* ---- Fetch asset suggestions (debounced) ---- */
+  /* ---- Fetch asset suggestions (With Smart Local Fallback) ---- */
   useEffect(() => {
-    const term = ticker.trim();
+    const term = ticker.trim().toUpperCase();
     if (!term) {
       setAssetSuggestions([]);
       return;
@@ -84,19 +89,24 @@ function AddAssetModalContent() {
 
     const id = setTimeout(async () => {
       try {
-        let res = await fetch(`${BACKEND_URL}/api/v1/assets?search=${encodeURIComponent(term)}`);
-        if (!res.ok) {
-          res = await fetch(`${BACKEND_URL}/api/assets?search=${encodeURIComponent(term)}`);
+        const res = await fetch(`${BACKEND_URL}/api/v1/assets?search=${encodeURIComponent(term)}`);
+        if (res.ok) {
+          const body = await res.json().catch(() => null);
+          setAssetSuggestions(body?.assets ?? []);
+          setShowDropdown(true);
+          return;
         }
-        if (!res.ok) return;
-        
-        const body = await res.json().catch(() => null);
-        setAssetSuggestions(body?.assets ?? []);
-        setShowDropdown(true);
       } catch (err) {
-        setAssetSuggestions([]);
+        console.warn("Backend search endpoint unavailable, using local asset catalog fallback.");
       }
-    }, 300);
+
+      // Local Match Fallback Loop
+      const matches = LOCAL_ASSET_CATALOG.filter(
+        (a) => a.ticker.includes(term) || a.name.toUpperCase().includes(term)
+      );
+      setAssetSuggestions(matches);
+      setShowDropdown(true);
+    }, 250);
 
     return () => clearTimeout(id);
   }, [ticker]);
@@ -122,14 +132,8 @@ function AddAssetModalContent() {
         return;
       }
 
-      const headers = {
-        Authorization: `Bearer ${session.access_token}`,
-        "Content-Type": "application/json",
-      };
-
-      // Construct payload leaving portfolio_id as null for auto-resolution
+      // CRITICAL: We completely omit the portfolio_id key so the backend uses its default resolution fallback
       const payload = {
-        portfolio_id: null,
         ticker: ticker.trim().toUpperCase(),
         asset_name: assetName.trim(),
         asset_type: assetType.toLowerCase(),
@@ -139,25 +143,24 @@ function AddAssetModalContent() {
         executed_at: new Date(date).toISOString(),
       };
 
-      /* POST straight to the exact endpoint verified on your Swagger docs screen */
-      let res = await fetch(`${BACKEND_URL}/api/v1/portfolio/transactions`, {
+      // Targeted execution strictly against your verified Swagger endpoint mapping
+      const res = await fetch(`${BACKEND_URL}/api/v1/portfolio/transactions`, {
         method: "POST",
-        headers,
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify(payload),
       });
 
-      // Secondary fallback endpoint safety check
-      if (!res.ok) {
-        res = await fetch(`${BACKEND_URL}/api/transactions`, {
-          method: "POST",
-          headers,
-          body: JSON.stringify(payload),
-        });
-      }
-
       if (!res.ok) {
         const body = await res.json().catch(() => null);
-        setError(body?.detail ?? `Server rejected transaction mapping (Status ${res.status})`);
+        // If it's a validation error, extract the message arrays cleanly
+        const detailMessage = typeof body?.detail === "object" 
+          ? JSON.stringify(body.detail) 
+          : body?.detail;
+          
+        setError(detailMessage ?? `Server rejected transaction log entry (Status ${res.status})`);
         setIsSubmitting(false);
         return;
       }
@@ -166,12 +169,11 @@ function AddAssetModalContent() {
       setAssetName("");
       setShowDropdown(false);
       
-      // Fire live refresh notifications across your tables
       window.dispatchEvent(new CustomEvent("portfolio-updated"));
       router.refresh();
       closeModal();
     } catch (err: any) {
-      setError(err.message || "An unexpected network error occurred.");
+      setError(err.message || "An unexpected network execution connection failure occurred.");
     } finally {
       setIsSubmitting(false);
     }
@@ -224,13 +226,13 @@ function AddAssetModalContent() {
                 <div className="absolute left-0 right-0 mt-1 z-50 max-h-48 overflow-auto rounded-md border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-lg">
                   {assetSuggestions.map((a: any) => (
                     <button
-                      key={a.id ?? a.ticker}
+                      key={a.ticker}
                       type="button"
                       onMouseDown={(e) => {
                         e.preventDefault();
-                        setTicker((a.ticker || "").toUpperCase());
-                        setAssetName(a.name || "");
-                        setAssetType((a.asset_type || "stock") as AssetType);
+                        setTicker(a.ticker.toUpperCase());
+                        setAssetName(a.name);
+                        setAssetType(a.asset_type as AssetType);
                         setShowDropdown(false);
                       }}
                       className="w-full text-left px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-900 dark:text-white transition-colors"
@@ -296,7 +298,7 @@ function AddAssetModalContent() {
                 <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
                   <div className="flex items-start gap-2.5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 dark:bg-red-950/30 dark:border-red-900/50">
                     <AlertCircle className="size-4 mt-0.5 shrink-0 text-red-500" />
-                    <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+                    <p className="text-sm text-red-700 dark:text-red-300 font-mono text-xs max-w-full overflow-x-auto">{error}</p>
                   </div>
                 </motion.div>
               )}
