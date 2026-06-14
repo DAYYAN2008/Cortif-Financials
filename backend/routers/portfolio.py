@@ -17,8 +17,10 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field, field_validator
+from supabase import Client
 
-from dependencies import get_current_user, get_supabase_client
+# Consume the request-scoped authorized token client context
+from dependencies import get_authenticated_context
 
 logger = logging.getLogger("cortif_backend.portfolio")
 
@@ -181,18 +183,10 @@ def _validate_sell(supabase, portfolio_id: str, asset_id: str, sell_qty: float) 
 )
 def create_transaction(
     payload: TransactionCreate,
-    user_id: str = Depends(get_current_user),
+    auth_context: tuple[str, Client] = Depends(get_authenticated_context),
 ):
-    """
-    Logs a new transaction to the ledger.
-
-    Steps:
-      1. Ensure the user has a portfolio (auto-create if missing).
-      2. Ensure the asset exists (auto-create if missing).
-      3. If SELL — validate sufficient holdings via the DB view.
-      4. Insert the transaction row.
-    """
-    supabase = get_supabase_client()
+    """Logs a new transaction to the ledger using fully authorized RLS clients."""
+    user_id, supabase = auth_context
 
     try:
         # 1. Portfolio
@@ -259,13 +253,10 @@ def create_transaction(
 def list_transactions(
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
-    user_id: str = Depends(get_current_user),
+    auth_context: tuple[str, Client] = Depends(get_authenticated_context),
 ):
-    """
-    Returns the user's transaction history, newest first.
-    Joins with the assets table to include ticker & asset_name.
-    """
-    supabase = get_supabase_client()
+    """Returns the user's transaction history via their authenticated account context."""
+    user_id, supabase = auth_context
 
     try:
         portfolio_id = _ensure_portfolio(supabase, user_id)
@@ -314,14 +305,10 @@ def list_transactions(
     summary="Get active holdings from the portfolio summary view",
 )
 def get_holdings(
-    user_id: str = Depends(get_current_user),
+    auth_context: tuple[str, Client] = Depends(get_authenticated_context),
 ):
-    """
-    Queries the `portfolio_holdings_summary` view to return
-    pre-calculated net_quantity and average_cost_basis per asset.
-    Only returns positions with net_quantity > 0.
-    """
-    supabase = get_supabase_client()
+    """Queries the summary view to return pre-calculated values using the user session token."""
+    user_id, supabase = auth_context
 
     try:
         portfolio_id = _ensure_portfolio(supabase, user_id)

@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from supabase import Client, create_client
+from supabase.client import ClientOptions  # <--- Secure Options Wrapper
 
 # Load env vars from root .env.local
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env.local"))
@@ -32,18 +33,11 @@ def get_supabase_client() -> Client:
 def get_authenticated_supabase(access_token: str) -> Client:
     """Supabase client safely scoped to the caller's JWT (RLS enforced)."""
     _require_supabase_config()
-    client = create_client(SUPABASE_URL, SUPABASE_KEY)
     
-    # Force authentication headers directly into the transport layers
-    # to guarantee that tokens never drop during relational sub-queries
-    auth_header = {"Authorization": f"Bearer {access_token}"}
+    # Inject token headers directly during the core construction lifecycle
+    opts = ClientOptions(headers={"Authorization": f"Bearer {access_token}"})
+    client = create_client(SUPABASE_URL, SUPABASE_KEY, options=opts)
     
-    if hasattr(client, "options") and hasattr(client.options, "headers"):
-        client.options.headers.update(auth_header)
-        
-    if hasattr(client, "postgrest") and hasattr(client.postgrest, "options") and hasattr(client.postgrest.options, "headers"):
-        client.postgrest.options.headers.update(auth_header)
-        
     client.postgrest.auth(access_token)
     return client
 
