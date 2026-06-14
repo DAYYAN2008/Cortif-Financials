@@ -214,7 +214,7 @@ def get_latest_news(limit: int = 8) -> list[dict]:
     supabase = _get_supabase_client()
     result = (
         supabase.table("external_news")
-        .select("*")
+        .select("id, title, link, summary, published_date, image_url, source")
         .order("published_date", desc=True)
         .limit(limit)
         .execute()

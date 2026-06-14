@@ -73,39 +73,83 @@ export function StockTicker({ stocks: initialStocks = MOCK_STOCKS }: StockTicker
   const [stocks, setStocks] = useState<StockData[]>(initialStocks);
   const [isConnected, setIsConnected] = useState(false);
 
-  // Initialize WebSocket connection
+  // Refs for reconnection lifecycle
+  const wsRef = useRef<WebSocket | null>(null);
+  const mountedRef = useRef(true);
+  const reconnectCountRef = useRef(0);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const MAX_RECONNECT_ATTEMPTS = 10;
+  const RECONNECT_DELAY_MS = 3000;
+
+  // WebSocket connection with auto-reconnect
   useEffect(() => {
-    const ws = new WebSocket(`${WS_BASE_URL}/ws/ticker`);
+    mountedRef.current = true;
 
-    ws.onopen = () => {
-      setIsConnected(true);
-    };
+    function connect() {
+      if (!mountedRef.current) return;
+      if (reconnectCountRef.current >= MAX_RECONNECT_ATTEMPTS) return;
 
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (Array.isArray(data) && data.length > 0) {
-          let liveStocks = [...data];
-          // Virtual Looper: If less than 20 symbols, pad the array to > 25 to prevent marquee gaps
-          if (liveStocks.length < 20) {
-            while (liveStocks.length <= 25) {
-              liveStocks = [...liveStocks, ...data];
+      const ws = new WebSocket(`${WS_BASE_URL}/ws/ticker`);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        if (!mountedRef.current) return;
+        setIsConnected(true);
+        reconnectCountRef.current = 0;
+      };
+
+      ws.onmessage = (event) => {
+        if (!mountedRef.current) return;
+        try {
+          const data = JSON.parse(event.data);
+          if (Array.isArray(data) && data.length > 0) {
+            let liveStocks = [...data];
+            // Virtual Looper: If less than 20 symbols, pad the array to > 25 to prevent marquee gaps
+            if (liveStocks.length < 20) {
+              while (liveStocks.length <= 25) {
+                liveStocks = [...liveStocks, ...data];
+              }
             }
+            setStocks(liveStocks);
           }
-          setStocks(liveStocks);
+        } catch (error) {
+          console.error("Error parsing WebSocket data:", error);
         }
-      } catch (error) {
-        console.error("Error parsing WebSocket data:", error);
-      }
-    };
+      };
 
-    ws.onclose = () => {
-      setIsConnected(false);
-    };
+      ws.onclose = () => {
+        if (!mountedRef.current) return;
+        setIsConnected(false);
+        wsRef.current = null;
+
+        // Auto-reconnect with delay
+        reconnectCountRef.current += 1;
+        if (reconnectCountRef.current < MAX_RECONNECT_ATTEMPTS) {
+          reconnectTimerRef.current = setTimeout(() => {
+            connect();
+          }, RECONNECT_DELAY_MS);
+        }
+      };
+
+      ws.onerror = () => {
+        if (!mountedRef.current) return;
+        // onerror is always followed by onclose, which handles reconnection
+      };
+    }
+
+    connect();
 
     // Cleanup on unmount
     return () => {
-      ws.close();
+      mountedRef.current = false;
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+      }
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
     };
   }, []);
 

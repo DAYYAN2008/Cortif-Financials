@@ -9,9 +9,11 @@ import type { NewsArticle } from "@/types/news";
  * Runs server-side at request time (no caching for fresh news).
  */
 async function getLatestNews(): Promise<NewsArticle[]> {
+  const backendUrl =
+    process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
   try {
-    const res = await fetch("http://localhost:8000/api/news/latest", {
-      cache: "no-store",
+    const res = await fetch(`${backendUrl}/api/news/latest`, {
+      next: { revalidate: 300 }, // ISR: revalidate every 5 minutes (news syncs every 30m)
     });
     if (!res.ok) return [];
     const data = await res.json();

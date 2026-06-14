@@ -24,9 +24,9 @@ export function useAuthRedirect() {
       setIsLoading(true);
       try {
         const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        if (session) {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (user) {
           router.push(targetPath);
         } else {
           router.push(`/login?redirectTo=${encodeURIComponent(targetPath)}`);

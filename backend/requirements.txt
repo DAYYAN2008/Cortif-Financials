@@ -59,5 +59,6 @@ uvicorn==0.44.0
 websockets==15.0.1
 yarl==1.23.0
 zstandard==0.25.0
-yfinance
-redis
+yfinance==0.2.54
+redis==5.3.0
+slowapi==0.1.9

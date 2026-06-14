@@ -1,12 +1,17 @@
 import asyncio
 import random
 import logging
+import os
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, HTTPException, Depends
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 from dependencies import get_current_user, get_supabase_client
 from routers.portfolio import router as portfolio_router
+from routes.transactions import router as transactions_router
 
 from services.news_service import sync_external_news, get_latest_news
 from services.stock_service import get_authentic_stock_data
@@ -73,7 +78,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-import os
+# ── Rate Limiting ──────────────────────────────────────────────────────────
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 origins_str = os.getenv("CORS_ORIGINS", "http://localhost:3000")
 origins = [origin.strip() for origin in origins_str.split(",") if origin.strip()]
 
@@ -87,9 +96,11 @@ app.add_middleware(
 
 # ── Routers ────────────────────────────────────────────────────────────────
 app.include_router(portfolio_router)
+app.include_router(transactions_router)
 
 @app.get("/")
-def read_root():
+@limiter.limit("60/minute")
+def read_root(request: Request):
    return {"status": "AI Backend is running!"}
 
 def fetch_real_updates():
@@ -137,7 +148,8 @@ async def websocket_markets(websocket: WebSocket):
 # ── News Hub Routes ─────────────────────────────────────────────────────────
 
 @app.get("/api/news/latest")
-async def get_latest_articles(limit: int = Query(default=8, ge=1, le=50)):
+@limiter.limit("30/minute")
+async def get_latest_articles(request: Request, limit: int = Query(default=8, ge=1, le=50)):
     """
     Return the most recent articles from the external_news table.
     Defaults to 8 articles, max 50.
@@ -150,9 +162,11 @@ async def get_latest_articles(limit: int = Query(default=8, ge=1, le=50)):
 
 
 @app.post("/api/news/sync")
-async def trigger_news_sync():
+@limiter.limit("2/minute")
+async def trigger_news_sync(request: Request, user_id: str = Depends(get_current_user)):
     """
     Manually trigger an RSS feed sync.
+    Requires authentication to prevent abuse.
     Fetches articles from all configured feeds and upserts into Supabase.
     """
     try:
@@ -165,7 +179,8 @@ async def trigger_news_sync():
 # ── Auth Routes ──────────────────────────────────────────────────────────────
 
 @app.get("/api/v1/auth/me")
-async def get_my_profile(user_id: str = Depends(get_current_user)):
+@limiter.limit("20/minute")
+async def get_my_profile(request: Request, user_id: str = Depends(get_current_user)):
     """
     Returns the current authenticated user's profile from the database.
     """
@@ -182,4 +197,4 @@ async def get_my_profile(user_id: str = Depends(get_current_user)):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
