@@ -74,7 +74,7 @@ function AddAssetModalContent() {
     }
   }, [isOpen]);
 
-  /* ---- Fetch asset suggestions (debounced with fallback) ---- */
+  /* ---- Fetch asset suggestions (debounced) ---- */
   useEffect(() => {
     const term = ticker.trim();
     if (!term) {
@@ -127,22 +127,9 @@ function AddAssetModalContent() {
         "Content-Type": "application/json",
       };
 
-      /* 1. Resolve Portfolio ID with route asymmetry check */
-      let portfolioRes = await fetch(`${BACKEND_URL}/api/portfolio`, { headers });
-      if (!portfolioRes.ok) {
-        portfolioRes = await fetch(`${BACKEND_URL}/api/v1/portfolio`, { headers });
-      }
-
-      if (!portfolioRes.ok) {
-        setError("Failed to resolve portfolio schema mapping endpoints.");
-        setIsSubmitting(false);
-        return;
-      }
-
-      const portfolio = await portfolioRes.json();
-
+      // Construct payload leaving portfolio_id as null for auto-resolution
       const payload = {
-        portfolio_id: portfolio.id,
+        portfolio_id: null,
         ticker: ticker.trim().toUpperCase(),
         asset_name: assetName.trim(),
         asset_type: assetType.toLowerCase(),
@@ -152,15 +139,16 @@ function AddAssetModalContent() {
         executed_at: new Date(date).toISOString(),
       };
 
-      /* 2. POST Transaction with dynamic routing fallback protection */
-      let res = await fetch(`${BACKEND_URL}/api/transactions`, {
+      /* POST straight to the exact endpoint verified on your Swagger docs screen */
+      let res = await fetch(`${BACKEND_URL}/api/v1/portfolio/transactions`, {
         method: "POST",
         headers,
         body: JSON.stringify(payload),
       });
 
+      // Secondary fallback endpoint safety check
       if (!res.ok) {
-        res = await fetch(`${BACKEND_URL}/api/v1/portfolio/transactions`, {
+        res = await fetch(`${BACKEND_URL}/api/transactions`, {
           method: "POST",
           headers,
           body: JSON.stringify(payload),
@@ -169,7 +157,7 @@ function AddAssetModalContent() {
 
       if (!res.ok) {
         const body = await res.json().catch(() => null);
-        setError(body?.detail ?? `Transaction rejected by backend server (Status ${res.status})`);
+        setError(body?.detail ?? `Server rejected transaction mapping (Status ${res.status})`);
         setIsSubmitting(false);
         return;
       }
@@ -177,6 +165,8 @@ function AddAssetModalContent() {
       setTicker("");
       setAssetName("");
       setShowDropdown(false);
+      
+      // Fire live refresh notifications across your tables
       window.dispatchEvent(new CustomEvent("portfolio-updated"));
       router.refresh();
       closeModal();
