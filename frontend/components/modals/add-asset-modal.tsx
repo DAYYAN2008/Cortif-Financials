@@ -43,6 +43,8 @@ function AddAssetModalContent() {
   const [ticker, setTicker] = useState("");
   const [assetName, setAssetName] = useState("");
   const [assetType, setAssetType] = useState<AssetType>("stock");
+  const [assetSuggestions, setAssetSuggestions] = useState<any[]>([]);
+  const [showDropdown, setShowDropdown] = useState(false);
   const [type, setType] = useState<TransactionType>("buy");
   const [quantity, setQuantity] = useState("");
   const [price, setPrice] = useState("");
@@ -91,6 +93,34 @@ function AddAssetModalContent() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, isSubmitting, closeModal]);
 
+  /* ---- Fetch asset suggestions (debounced) ---- */
+  useEffect(() => {
+    const term = ticker.trim();
+    if (!term) {
+      setAssetSuggestions([]);
+      return;
+    }
+
+    const id = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `${BACKEND_URL}/api/v1/assets?search=${encodeURIComponent(term)}`
+        );
+        if (!res.ok) {
+          setAssetSuggestions([]);
+          return;
+        }
+        const body = await res.json().catch(() => null);
+        setAssetSuggestions(body?.assets ?? []);
+        setShowDropdown(true);
+      } catch (err) {
+        setAssetSuggestions([]);
+      }
+    }, 300);
+
+    return () => clearTimeout(id);
+  }, [ticker]);
+
   /* ---- Form validation ---- */
   const isFormValid =
     ticker.trim().length > 0 &&
@@ -114,6 +144,7 @@ function AddAssetModalContent() {
 
       if (!session?.access_token) {
         setError("You must be logged in to add a transaction.");
+        setIsSubmitting(false);
         return;
       }
 
@@ -122,8 +153,8 @@ function AddAssetModalContent() {
         "Content-Type": "application/json",
       };
 
-      /* Resolve portfolio_id for this user */
-      const portfolioRes = await fetch(`${BACKEND_URL}/api/v1/portfolio`, {
+      /* 2. Resolve portfolio_id for this user */
+      const portfolioRes = await fetch(`${BACKEND_URL}/api/portfolio`, {
         headers,
       });
 
@@ -133,25 +164,27 @@ function AddAssetModalContent() {
           body?.detail ??
           `Failed to resolve portfolio (status ${portfolioRes.status})`;
         setError(typeof detail === "string" ? detail : JSON.stringify(detail));
+        setIsSubmitting(false);
         return;
       }
 
       const portfolio: { id: string } = await portfolioRes.json();
 
+      /* 3. Transform enums to match database constraints exactly */
       const payload = {
         portfolio_id: portfolio.id,
         ticker: ticker.trim().toUpperCase(),
         asset_name: assetName.trim(),
-        asset_type: assetType,
-        transaction_type: type,
+        asset_type: assetType.toLowerCase(),          // Enforces strict lowercase ('stock', 'crypto')
+        transaction_type: type.toUpperCase(),         // Enforces strict uppercase ('BUY', 'SELL')
         quantity: parseFloat(quantity),
         execution_price: parseFloat(price),
         executed_at: new Date(date).toISOString(),
       };
 
-      /* 3. POST to backend */
+      /* 4. POST transaction log back to transactional routers */
       const res = await fetch(
-        `${BACKEND_URL}/api/v1/portfolio/transactions`,
+        `${BACKEND_URL}/api/transactions`,
         {
           method: "POST",
           headers: {
@@ -165,8 +198,9 @@ function AddAssetModalContent() {
       if (!res.ok) {
         const body = await res.json().catch(() => null);
         const detail =
-          body?.detail ?? `Request failed with status ${res.status}`;
+          body?.detail ?? `Transaction registry rejected (status ${res.status})`;
         setError(typeof detail === "string" ? detail : JSON.stringify(detail));
+        setIsSubmitting(false);
         return;
       }
 
@@ -229,7 +263,7 @@ function AddAssetModalContent() {
           {/* Form Content */}
           <div className="px-6 py-6 space-y-5 max-h-[65vh] overflow-y-auto">
             {/* Asset Ticker */}
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 relative">
               <label className="text-xs font-medium text-slate-700 dark:text-slate-300">
                 Asset Ticker
               </label>
@@ -237,10 +271,38 @@ function AddAssetModalContent() {
                 type="text"
                 placeholder="e.g. AAPL, BTC"
                 value={ticker}
-                onChange={(e) => setTicker(e.target.value.toUpperCase())}
+                onFocus={() => setShowDropdown(true)}
+                onChange={(e) => {
+                  setTicker(e.target.value.toUpperCase());
+                  setShowDropdown(true);
+                }}
+                onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
                 disabled={isSubmitting}
                 className={inputClass}
               />
+
+              {/* Dropdown Box */}
+              {showDropdown && assetSuggestions.length > 0 && (
+                <div className="absolute left-0 right-0 mt-1 z-50 max-h-48 overflow-auto rounded-md border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-lg">
+                  {assetSuggestions.map((a: any) => (
+                    <button
+                      key={a.id ?? a.ticker}
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault(); // prevents input from blurring out early
+                        setTicker((a.ticker || "").toUpperCase());
+                        setAssetName(a.name || "");
+                        setAssetType((a.asset_type || "stock") as AssetType);
+                        setShowDropdown(false);
+                      }}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-900 dark:text-white transition-colors"
+                    >
+                      <span className="font-semibold mr-2 text-slate-900 dark:text-slate-100">{a.ticker}</span>
+                      <span className="text-slate-500 dark:text-slate-400">- {a.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Asset Name */}
