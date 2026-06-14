@@ -30,9 +30,20 @@ def get_supabase_client() -> Client:
 
 
 def get_authenticated_supabase(access_token: str) -> Client:
-    """Supabase client scoped to the caller's JWT (RLS enforced)."""
+    """Supabase client safely scoped to the caller's JWT (RLS enforced)."""
     _require_supabase_config()
     client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    
+    # Force authentication headers directly into the transport layers
+    # to guarantee that tokens never drop during relational sub-queries
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+    
+    if hasattr(client, "options") and hasattr(client.options, "headers"):
+        client.options.headers.update(auth_header)
+        
+    if hasattr(client, "postgrest") and hasattr(client.postgrest, "options") and hasattr(client.postgrest.options, "headers"):
+        client.postgrest.options.headers.update(auth_header)
+        
     client.postgrest.auth(access_token)
     return client
 
