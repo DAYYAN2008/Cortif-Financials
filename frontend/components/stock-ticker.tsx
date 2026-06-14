@@ -84,7 +84,11 @@ export function StockTicker({ stocks: initialStocks = MOCK_STOCKS }: StockTicker
 
   // WebSocket connection with auto-reconnect
   useEffect(() => {
+<<<<<<< HEAD
     mountedRef.current = true;
+=======
+    const ws = new WebSocket(`${WS_BASE_URL}/ws/ticker`);
+>>>>>>> c6dcdb38b59498ccd9a623d53cc349fa5618104a
 
     function connect() {
       if (!mountedRef.current) return;

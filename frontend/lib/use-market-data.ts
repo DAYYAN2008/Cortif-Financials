@@ -173,7 +173,11 @@ export function useMarketData(): UseMarketDataReturn {
             stocks: transformStocks(payload.stocks, prev.stocks),
             mutualFunds: prev.mutualFunds, // Backend doesn't send MF data yet
             forex: transformForex(payload.forex, prev.forex),
+<<<<<<< HEAD
             commodities: transformCommodities(payload.crypto, prev.commodities),
+=======
+            commodities: transformCommodities(payload.commodities, prev.commodities),
+>>>>>>> c6dcdb38b59498ccd9a623d53cc349fa5618104a
             payouts: prev.payouts, // Backend doesn't send payout data yet
             lastUpdated: payload.timestamp ?? new Date().toISOString(),
           }));

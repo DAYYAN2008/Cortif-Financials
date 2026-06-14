@@ -107,12 +107,17 @@ function AddAssetModalContent() {
     setIsSubmitting(true);
 
     try {
+<<<<<<< HEAD
+=======
+      /* 1. Get session token */
+>>>>>>> c6dcdb38b59498ccd9a623d53cc349fa5618104a
       const {
         data: { session },
       } = await supabase.auth.getSession();
 
       if (!session?.access_token) {
         setError("You must be logged in to add a transaction.");
+<<<<<<< HEAD
         return;
       }
 
@@ -143,22 +148,50 @@ function AddAssetModalContent() {
         asset_name: assetName.trim(),
         asset_type: assetType,
         transaction_type: type,
+=======
+        setIsSubmitting(false);
+        return;
+      }
+
+      /* 2. Build payload */
+      const payload = {
+        ticker: ticker.trim().toUpperCase(),
+        asset_name: assetName.trim(),
+        asset_type: assetType,
+        transaction_type: type.toUpperCase(), // "BUY" | "SELL"
+>>>>>>> c6dcdb38b59498ccd9a623d53cc349fa5618104a
         quantity: parseFloat(quantity),
         execution_price: parseFloat(price),
         executed_at: new Date(date).toISOString(),
       };
 
+<<<<<<< HEAD
       const res = await fetch(`${BACKEND_URL}/api/transactions`, {
         method: "POST",
         headers,
         body: JSON.stringify(payload),
       });
+=======
+      /* 3. POST to backend */
+      const res = await fetch(
+        `${BACKEND_URL}/api/v1/portfolio/transactions`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        }
+      );
+>>>>>>> c6dcdb38b59498ccd9a623d53cc349fa5618104a
 
       if (!res.ok) {
         const body = await res.json().catch(() => null);
         const detail =
           body?.detail ?? `Request failed with status ${res.status}`;
         setError(typeof detail === "string" ? detail : JSON.stringify(detail));
+<<<<<<< HEAD
         return;
       }
 
@@ -171,6 +204,13 @@ function AddAssetModalContent() {
       setDate(new Date().toISOString().split("T")[0]);
       setError(null);
 
+=======
+        setIsSubmitting(false);
+        return;
+      }
+
+      /* 4. Success — notify dashboard & close */
+>>>>>>> c6dcdb38b59498ccd9a623d53cc349fa5618104a
       window.dispatchEvent(new CustomEvent("portfolio-updated"));
       router.refresh();
       closeModal();

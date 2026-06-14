@@ -24,9 +24,15 @@ export function useAuthRedirect() {
       setIsLoading(true);
       try {
         const {
+<<<<<<< HEAD
           data: { user },
         } = await supabase.auth.getUser();
         if (user) {
+=======
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (session) {
+>>>>>>> c6dcdb38b59498ccd9a623d53cc349fa5618104a
           router.push(targetPath);
         } else {
           router.push(`/login?redirectTo=${encodeURIComponent(targetPath)}`);
