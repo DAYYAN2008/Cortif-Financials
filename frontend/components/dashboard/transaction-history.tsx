@@ -1,18 +1,24 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { useEffect, useState, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowUpCircle,
   ArrowDownCircle,
   Plus,
   Clock,
   Filter,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/utils/currency";
+import { createClient } from "@/utils/supabase/client";
+
+const BACKEND_URL =
+  process.env.NEXT_PUBLIC_BACKEND_URL ?? "https://dayyanyasir-cortif-backend.hf.space";
 
 /* ------------------------------------------------------------------ */
-/*  Types                                                              */
+/* Types                                                              */
 /* ------------------------------------------------------------------ */
 interface Transaction {
   id: string;
@@ -26,63 +32,7 @@ interface Transaction {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Mock Data                                                          */
-/* ------------------------------------------------------------------ */
-const MOCK_TRANSACTIONS: Transaction[] = [
-  {
-    id: "t1",
-    type: "BUY",
-    assetName: "Tesla Inc.",
-    ticker: "TSLA",
-    date: "May 28, 2026",
-    quantity: 8,
-    price: 348.60,
-    total: 2788.80,
-  },
-  {
-    id: "t2",
-    type: "BUY",
-    assetName: "Bitcoin",
-    ticker: "BTC",
-    date: "May 15, 2026",
-    quantity: 0.045,
-    price: 67210.00,
-    total: 3024.45,
-  },
-  {
-    id: "t3",
-    type: "SELL",
-    assetName: "Apple Inc.",
-    ticker: "AAPL",
-    date: "Apr 30, 2026",
-    quantity: 12,
-    price: 208.40,
-    total: 2500.80,
-  },
-  {
-    id: "t4",
-    type: "BUY",
-    assetName: "Gold (XAU)",
-    ticker: "GOLD",
-    date: "Apr 12, 2026",
-    quantity: 0.75,
-    price: 2048.30,
-    total: 1536.23,
-  },
-  {
-    id: "t5",
-    type: "BUY",
-    assetName: "Apple Inc.",
-    ticker: "AAPL",
-    date: "Mar 22, 2026",
-    quantity: 20,
-    price: 182.15,
-    total: 3643.00,
-  },
-];
-
-/* ------------------------------------------------------------------ */
-/*  Transaction Row                                                    */
+/* Transaction Row                                                   */
 /* ------------------------------------------------------------------ */
 function TransactionRow({
   tx,
@@ -101,7 +51,7 @@ function TransactionRow({
       animate={{ opacity: 1, y: 0 }}
       transition={{
         duration: 0.35,
-        delay: 0.15 + index * 0.06,
+        delay: index * 0.04,
         ease: [0.22, 1, 0.36, 1],
       }}
       className={cn(
@@ -111,7 +61,7 @@ function TransactionRow({
         "hover:bg-slate-50/80 dark:hover:bg-slate-800/30"
       )}
     >
-      {/* ── Type Icon ── */}
+      {/* Type Icon */}
       <div
         className={cn(
           "flex items-center justify-center size-9 rounded-lg shrink-0",
@@ -127,15 +77,13 @@ function TransactionRow({
         )}
       </div>
 
-      {/* ── Asset + Type Label ── */}
+      {/* Asset + Type Label */}
       <div className="flex flex-col min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className="text-[13px] font-semibold text-slate-900 dark:text-white truncate">
             {tx.assetName}
           </span>
-          <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500">
-            •
-          </span>
+          <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500">•</span>
           <span className="text-[12px] font-semibold text-slate-500 dark:text-slate-400 tracking-wide uppercase">
             {tx.ticker}
           </span>
@@ -157,7 +105,7 @@ function TransactionRow({
         </div>
       </div>
 
-      {/* ── Quantity & Price (hidden on smallest screens) ── */}
+      {/* Quantity & Price */}
       <div className="hidden sm:flex flex-col items-end shrink-0">
         <span className="text-[12px] font-medium text-slate-600 dark:text-slate-300 font-mono tabular-nums">
           {tx.ticker === "BTC" ? tx.quantity.toFixed(4) : tx.quantity.toLocaleString()}{" "}
@@ -169,24 +117,15 @@ function TransactionRow({
         </span>
       </div>
 
-      {/* ── Total Volume ── */}
+      {/* Total Volume */}
       <div className="flex flex-col items-end shrink-0 min-w-[90px]">
-        <span
-          className={cn(
-            "text-[13px] font-semibold font-mono tabular-nums",
-            isBuy
-              ? "text-slate-900 dark:text-white"
-              : "text-slate-900 dark:text-white"
-          )}
-        >
+        <span className="text-[13px] font-semibold font-mono tabular-nums text-slate-900 dark:text-white">
           {isBuy ? "−" : "+"}{formatCurrency(tx.total, currency)}
         </span>
         <span
           className={cn(
             "text-[10px] font-medium mt-0.5",
-            isBuy
-              ? "text-emerald-500 dark:text-emerald-400/70"
-              : "text-red-500 dark:text-red-400/70"
+            isBuy ? "text-emerald-500 dark:text-emerald-400/70" : "text-red-500 dark:text-red-400/70"
           )}
         >
           {isBuy ? "Invested" : "Received"}
@@ -197,7 +136,7 @@ function TransactionRow({
 }
 
 /* ------------------------------------------------------------------ */
-/*  Exported Transaction History Component                             */
+/* Exported Transaction History Component                             */
 /* ------------------------------------------------------------------ */
 export function TransactionHistory({
   baseCurrency,
@@ -206,18 +145,86 @@ export function TransactionHistory({
   baseCurrency: string;
   onLogTransaction: () => void;
 }) {
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const supabase = createClient();
+
+  const fetchLiveTransactions = useCallback(async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+
+      const headers = { Authorization: `Bearer ${session.access_token}` };
+
+      // Query raw logging table entries
+      const res = await fetch(`${BACKEND_URL}/api/transactions`, { headers });
+      
+      let rawData = [];
+      if (res.ok) {
+        rawData = await res.json();
+      } else {
+        // Fallback validation mapping path variant if needed
+        const altRes = await fetch(`${BACKEND_URL}/api/v1/portfolio/transactions`, { headers });
+        if (altRes.ok) {
+          rawData = await altRes.json();
+        }
+      }
+
+      // Handle raw array mapping configurations safely
+      const parsedRows = Array.isArray(rawData) ? rawData : rawData?.transactions ?? [];
+
+      const formatted: Transaction[] = parsedRows.map((row: any) => {
+        const qty = parseFloat(row.quantity) || 0;
+        const prc = parseFloat(row.execution_price) || 0;
+        
+        // Format native Postgres date stamp safely
+        const txDate = row.executed_at 
+          ? new Date(row.executed_at).toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            })
+          : "Recent Date";
+
+        return {
+          id: row.id || Math.random().toString(),
+          type: (row.transaction_type || "BUY").toUpperCase() as "BUY" | "SELL",
+          assetName: row.asset_name || "Asset Registered",
+          ticker: row.ticker || "???",
+          date: txDate,
+          quantity: qty,
+          price: prc,
+          total: qty * prc,
+        };
+      });
+
+      setTransactions(formatted);
+    } catch (err) {
+      console.error("Failed to sync structural ledger data:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [supabase.auth]);
+
+  useEffect(() => {
+    fetchLiveTransactions();
+
+    window.addEventListener("portfolio-updated", fetchLiveTransactions);
+    return () => window.removeEventListener("portfolio-updated", fetchLiveTransactions);
+  }, [fetchLiveTransactions]);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
+      transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
       className={cn(
         "rounded-xl border overflow-hidden",
         "border-slate-200/80 bg-white dark:border-slate-800/60 dark:bg-slate-900/80",
         "shadow-sm dark:shadow-none"
       )}
     >
-      {/* ── Section Header ── */}
+      {/* Section Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800/60">
         <div className="flex items-center gap-2.5">
           <div className="flex items-center justify-center size-7 rounded-lg bg-slate-100 dark:bg-slate-800">
@@ -232,25 +239,15 @@ export function TransactionHistory({
             </p>
           </div>
           <span className="flex items-center justify-center h-5 px-1.5 rounded-md bg-slate-100 dark:bg-slate-800 text-[11px] font-medium text-slate-500 dark:text-slate-400 ml-1">
-            {MOCK_TRANSACTIONS.length}
+            {transactions.length}
           </span>
         </div>
 
         <div className="flex items-center gap-1.5">
-          {/* Filter button */}
-          <button
-            className={cn(
-              "flex items-center justify-center size-8 rounded-lg",
-              "text-slate-400 hover:text-slate-600 hover:bg-slate-100",
-              "dark:text-slate-500 dark:hover:text-slate-300 dark:hover:bg-slate-800",
-              "transition-colors cursor-pointer"
-            )}
-            aria-label="Filter transactions"
-          >
+          <button className="flex items-center justify-center size-8 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:text-slate-500 dark:hover:text-slate-300 dark:hover:bg-slate-800 transition-colors cursor-pointer">
             <Filter className="size-3.5" />
           </button>
 
-          {/* Log New Transaction button */}
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.97 }}
@@ -260,8 +257,7 @@ export function TransactionHistory({
               "text-[12px] font-medium transition-all cursor-pointer",
               "bg-emerald-600 text-white hover:bg-emerald-500",
               "dark:bg-emerald-500 dark:hover:bg-emerald-400",
-              "shadow-sm shadow-emerald-600/20 dark:shadow-emerald-500/15",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-950"
+              "shadow-sm shadow-emerald-600/20 dark:shadow-emerald-500/15"
             )}
           >
             <Plus className="size-3.5" />
@@ -270,35 +266,38 @@ export function TransactionHistory({
         </div>
       </div>
 
-      {/* ── Timeline / Feed ── */}
-      <div className="relative">
+      {/* Timeline / Feed */}
+      <div className="relative min-h-[80px]">
         {/* Left timeline accent line */}
         <div className="absolute left-[37px] top-4 bottom-4 w-px bg-gradient-to-b from-slate-200 via-slate-200/60 to-transparent dark:from-slate-700 dark:via-slate-700/40 hidden sm:block" />
 
-        {MOCK_TRANSACTIONS.map((tx, i) => (
-          <TransactionRow
-            key={tx.id}
-            tx={tx}
-            currency={baseCurrency}
-            index={i}
-          />
-        ))}
+        {isLoading ? (
+          <div className="flex items-center justify-center py-10 w-full">
+            <Loader2 className="size-5 animate-spin text-slate-400" />
+          </div>
+        ) : transactions.length === 0 ? (
+          <div className="text-center py-12 text-sm text-slate-400 dark:text-slate-500">
+            No logged transaction history found.
+          </div>
+        ) : (
+          transactions.map((tx, i) => (
+            <TransactionRow
+              key={tx.id}
+              tx={tx}
+              currency={baseCurrency}
+              index={i}
+            />
+          ))
+        )}
       </div>
 
-      {/* ── Footer ── */}
+      {/* Footer */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ delay: 0.5 }}
         className="flex items-center justify-center px-6 py-3 border-t border-slate-100 dark:border-slate-800/40"
       >
-        <button
-          className={cn(
-            "text-[12px] font-medium",
-            "text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300",
-            "transition-colors cursor-pointer"
-          )}
-        >
+        <button className="text-[12px] font-medium text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 transition-colors cursor-pointer">
           View all transactions →
         </button>
       </motion.div>

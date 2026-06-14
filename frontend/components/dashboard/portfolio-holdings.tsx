@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import {
   TrendingUp,
@@ -10,12 +11,17 @@ import {
   Briefcase,
   Search,
   SlidersHorizontal,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/utils/currency";
+import { createClient } from "@/utils/supabase/client";
+
+const BACKEND_URL =
+  process.env.NEXT_PUBLIC_BACKEND_URL ?? "https://dayyanyasir-cortif-backend.hf.space";
 
 /* ------------------------------------------------------------------ */
-/*  Types                                                              */
+/* Types                                                              */
 /* ------------------------------------------------------------------ */
 interface Holding {
   id: string;
@@ -32,65 +38,7 @@ interface Holding {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Mock Data                                                          */
-/* ------------------------------------------------------------------ */
-const MOCK_HOLDINGS: Holding[] = [
-  {
-    id: "1",
-    name: "Apple Inc.",
-    ticker: "AAPL",
-    type: "stock",
-    allocation: 34.2,
-    quantity: 45,
-    avgBuyPrice: 178.25,
-    currentPrice: 213.07,
-    totalValue: 9588.15,
-    pnlAbsolute: 1566.90,
-    pnlPercent: 19.53,
-  },
-  {
-    id: "2",
-    name: "Tesla Inc.",
-    ticker: "TSLA",
-    type: "stock",
-    allocation: 22.8,
-    quantity: 18,
-    avgBuyPrice: 242.50,
-    currentPrice: 355.18,
-    totalValue: 6393.24,
-    pnlAbsolute: 2028.24,
-    pnlPercent: 46.46,
-  },
-  {
-    id: "3",
-    name: "Bitcoin",
-    ticker: "BTC",
-    type: "crypto",
-    allocation: 31.5,
-    quantity: 0.128,
-    avgBuyPrice: 52340.00,
-    currentPrice: 68942.35,
-    totalValue: 8824.62,
-    pnlAbsolute: 2125.11,
-    pnlPercent: 31.73,
-  },
-  {
-    id: "4",
-    name: "Gold (XAU)",
-    ticker: "GOLD",
-    type: "commodity",
-    allocation: 11.5,
-    quantity: 1.65,
-    avgBuyPrice: 2048.30,
-    currentPrice: 1954.10,
-    totalValue: 3224.27,
-    pnlAbsolute: -155.43,
-    pnlPercent: -4.60,
-  },
-];
-
-/* ------------------------------------------------------------------ */
-/*  Asset Type Badge                                                   */
+/* Asset Type Badge                                                   */
 /* ------------------------------------------------------------------ */
 function AssetTypeBadge({ type }: { type: Holding["type"] }) {
   const config = {
@@ -111,23 +59,23 @@ function AssetTypeBadge({ type }: { type: Holding["type"] }) {
     },
   };
 
-  const { label, bg, text } = config[type];
+  const currentConfig = config[type] || config.stock;
 
   return (
     <span
       className={cn(
         "inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider",
-        bg,
-        text
+        currentConfig.bg,
+        currentConfig.text
       )}
     >
-      {label}
+      {currentConfig.label}
     </span>
   );
 }
 
 /* ------------------------------------------------------------------ */
-/*  Allocation Bar                                                     */
+/* Allocation Bar                                                     */
 /* ------------------------------------------------------------------ */
 function AllocationBar({ percent }: { percent: number }) {
   return (
@@ -137,7 +85,7 @@ function AllocationBar({ percent }: { percent: number }) {
           className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-400"
           initial={{ width: 0 }}
           animate={{ width: `${percent}%` }}
-          transition={{ duration: 0.8, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: 0.8, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
         />
       </div>
       <span className="text-[13px] font-medium text-slate-700 dark:text-slate-300 font-mono tabular-nums">
@@ -148,7 +96,7 @@ function AllocationBar({ percent }: { percent: number }) {
 }
 
 /* ------------------------------------------------------------------ */
-/*  P&L Cell                                                           */
+/* P&L Cell                                                           */
 /* ------------------------------------------------------------------ */
 function PnlCell({
   absolute,
@@ -197,7 +145,7 @@ function PnlCell({
 }
 
 /* ------------------------------------------------------------------ */
-/*  Table Row                                                          */
+/* Table Row                                                          */
 /* ------------------------------------------------------------------ */
 function HoldingRow({
   holding,
@@ -214,7 +162,7 @@ function HoldingRow({
       animate={{ opacity: 1, y: 0 }}
       transition={{
         duration: 0.35,
-        delay: 0.15 + index * 0.06,
+        delay: index * 0.04,
         ease: [0.22, 1, 0.36, 1],
       }}
       className={cn(
@@ -224,18 +172,9 @@ function HoldingRow({
         "cursor-pointer"
       )}
     >
-      {/* Asset Name & Ticker */}
       <td className="px-6 py-4">
         <div className="flex items-center gap-3">
-          {/* Icon circle */}
-          <div
-            className={cn(
-              "hidden sm:flex items-center justify-center size-9 rounded-lg shrink-0",
-              "bg-slate-100 dark:bg-slate-800/80",
-              "group-hover:bg-slate-200/80 dark:group-hover:bg-slate-700/60",
-              "transition-colors duration-200"
-            )}
-          >
+          <div className="hidden sm:flex items-center justify-center size-9 rounded-lg shrink-0 bg-slate-100 dark:bg-slate-800/80 group-hover:bg-slate-200/80 dark:group-hover:bg-slate-700/60 transition-colors duration-200">
             <Briefcase className="size-4 text-slate-500 dark:text-slate-400" />
           </div>
           <div className="flex flex-col min-w-0">
@@ -243,9 +182,7 @@ function HoldingRow({
               <span className="text-[13px] font-semibold text-slate-900 dark:text-white truncate">
                 {holding.name}
               </span>
-              <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500">
-                •
-              </span>
+              <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500">•</span>
               <span className="text-[12px] font-semibold text-slate-500 dark:text-slate-400 tracking-wide uppercase">
                 {holding.ticker}
               </span>
@@ -257,12 +194,10 @@ function HoldingRow({
         </div>
       </td>
 
-      {/* Allocation */}
       <td className="px-4 py-4">
         <AllocationBar percent={holding.allocation} />
       </td>
 
-      {/* Quantity */}
       <td className="px-4 py-4 text-right">
         <span className="text-[13px] font-medium text-slate-700 dark:text-slate-300 font-mono tabular-nums">
           {holding.type === "crypto"
@@ -271,28 +206,24 @@ function HoldingRow({
         </span>
       </td>
 
-      {/* Avg. Buy Price — hidden on mobile */}
       <td className="px-4 py-4 text-right hidden lg:table-cell">
         <span className="text-[13px] text-slate-500 dark:text-slate-400 font-mono tabular-nums">
           {formatCurrency(holding.avgBuyPrice, currency)}
         </span>
       </td>
 
-      {/* Current Price — hidden on small screens */}
       <td className="px-4 py-4 text-right hidden md:table-cell">
         <span className="text-[13px] font-medium text-slate-700 dark:text-slate-300 font-mono tabular-nums">
           {formatCurrency(holding.currentPrice, currency)}
         </span>
       </td>
 
-      {/* Total Value */}
       <td className="px-4 py-4 text-right">
         <span className="text-[13px] font-semibold text-slate-900 dark:text-white font-mono tabular-nums">
           {formatCurrency(holding.totalValue, currency)}
         </span>
       </td>
 
-      {/* Unrealized P&L */}
       <td className="px-4 py-4 text-right">
         <div className="flex items-center justify-end gap-2">
           <PnlCell
@@ -308,15 +239,12 @@ function HoldingRow({
 }
 
 /* ------------------------------------------------------------------ */
-/*  Summary Footer                                                     */
+/* Summary Footer                                                    */
 /* ------------------------------------------------------------------ */
-function TableFooter({ currency }: { currency: string }) {
-  const totalValue = MOCK_HOLDINGS.reduce((s, h) => s + h.totalValue, 0);
-  const totalPnl = MOCK_HOLDINGS.reduce((s, h) => s + h.pnlAbsolute, 0);
-  const totalCost = MOCK_HOLDINGS.reduce(
-    (s, h) => s + h.avgBuyPrice * h.quantity,
-    0
-  );
+function TableFooter({ holdings, currency }: { holdings: Holding[]; currency: string }) {
+  const totalValue = holdings.reduce((sum, item) => sum + item.totalValue, 0);
+  const totalPnl = holdings.reduce((sum, item) => sum + item.pnlAbsolute, 0);
+  const totalCost = holdings.reduce((sum, item) => sum + (item.avgBuyPrice * item.quantity), 0);
   const totalPnlPercent = totalCost > 0 ? (totalPnl / totalCost) * 100 : 0;
   const isPositive = totalPnl >= 0;
 
@@ -324,7 +252,6 @@ function TableFooter({ currency }: { currency: string }) {
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      transition={{ delay: 0.5 }}
       className="flex items-center justify-between px-6 py-4 border-t border-slate-200/80 dark:border-slate-800/60 bg-slate-50/50 dark:bg-slate-900/50"
     >
       <div className="flex items-center gap-2">
@@ -332,7 +259,7 @@ function TableFooter({ currency }: { currency: string }) {
           Total Portfolio
         </span>
         <span className="flex items-center justify-center h-5 px-1.5 rounded-md bg-slate-100 dark:bg-slate-800 text-[11px] font-medium text-slate-500 dark:text-slate-400">
-          {MOCK_HOLDINGS.length} assets
+          {holdings.length} assets
         </span>
       </div>
 
@@ -351,9 +278,7 @@ function TableFooter({ currency }: { currency: string }) {
           <span
             className={cn(
               "text-[13px] font-semibold font-mono tabular-nums",
-              isPositive
-                ? "text-emerald-600 dark:text-emerald-400"
-                : "text-red-600 dark:text-red-400"
+              isPositive ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
             )}
           >
             {isPositive ? "+" : ""}
@@ -362,13 +287,10 @@ function TableFooter({ currency }: { currency: string }) {
           <span
             className={cn(
               "text-[11px] font-medium font-mono tabular-nums ml-0.5",
-              isPositive
-                ? "text-emerald-500/80 dark:text-emerald-400/60"
-                : "text-red-500/80 dark:text-red-400/60"
+              isPositive ? "text-emerald-500/80 dark:text-emerald-400/60" : "text-red-500/80 dark:text-red-400/60"
             )}
           >
-            ({isPositive ? "+" : ""}
-            {totalPnlPercent.toFixed(2)}%)
+            ({isPositive ? "+" : ""}{totalPnlPercent.toFixed(2)}%)
           </span>
         </div>
       </div>
@@ -377,105 +299,159 @@ function TableFooter({ currency }: { currency: string }) {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Main Holdings Table Component                                      */
+/* Main Holdings Table Component                                      */
 /* ------------------------------------------------------------------ */
 export function PortfolioHoldings({ baseCurrency }: { baseCurrency: string }) {
+  const [holdings, setHoldings] = useState<Holding[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const supabase = createClient();
+
+  const fetchLiveHoldings = useCallback(async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+
+      const headers = { Authorization: `Bearer ${session.access_token}` };
+      
+      // Step A: Fetch base portfolio definitions 
+      const portfolioRes = await fetch(`${BACKEND_URL}/api/portfolio`, { headers });
+      if (!portfolioRes.ok) throw new Error("Could not download system portfolio specs.");
+      const portfolio = await portfolioRes.json();
+
+      // Step B: Query view rows populated by public.portfolio_holdings_summary
+      const holdingsRes = await fetch(`${BACKEND_URL}/api/portfolio/holdings`, { headers });
+      if (!holdingsRes.ok) {
+        // Fallback fallback mechanism if routes use alternate paths
+        const altRes = await fetch(`${BACKEND_URL}/api/v1/portfolio/holdings`, { headers });
+        if (!altRes.ok) throw new Error("Calculated view data streaming failure.");
+        const data = await altRes.json();
+        renderHoldingsRows(data?.holdings ?? data ?? []);
+        return;
+      }
+
+      const data = await holdingsRes.json();
+      renderHoldingsRows(data?.holdings ?? data ?? []);
+    } catch (err: any) {
+      setError(err.message || "Data hydration failed.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [supabase.auth]);
+
+  const renderHoldingsRows = (rawRows: any[]) => {
+    const totalBookValue = rawRows.reduce((acc, r) => acc + (parseFloat(r.total_cost) || 0), 0);
+    
+    const formatted: Holding[] = rawRows.map((row: any) => {
+      const totalCost = parseFloat(row.total_cost) || 0;
+      const alloc = totalBookValue > 0 ? (totalCost / totalBookValue) * 100 : 0;
+      const qty = parseFloat(row.net_quantity) || 0;
+      const avgPrice = parseFloat(row.average_cost_basis) || 0;
+
+      return {
+        id: row.asset_id || Math.random().toString(),
+        name: row.asset_name || "Unknown Asset",
+        ticker: row.ticker || "???",
+        type: (row.asset_type || "stock").toLowerCase() as Holding["type"],
+        allocation: alloc,
+        quantity: qty,
+        avgBuyPrice: avgPrice,
+        currentPrice: avgPrice, // Will be bound live via target WebSockets streaming ticker loops
+        totalValue: totalCost,
+        pnlAbsolute: 0, // Cold ledger baseline maps to uniform cost basis initially
+        pnlPercent: 0,
+      };
+    });
+
+    setHoldings(formatted);
+  };
+
+  useEffect(() => {
+    fetchLiveHoldings();
+
+    // Bind event hook triggered by modal transaction completions
+    window.addEventListener("portfolio-updated", fetchLiveHoldings);
+    return () => window.removeEventListener("portfolio-updated", fetchLiveHoldings);
+  }, [fetchLiveHoldings]);
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center p-12 rounded-xl border border-slate-200/80 bg-white dark:border-slate-800/60 dark:bg-slate-900/80">
+        <Loader2 className="size-6 animate-spin text-slate-400 mb-2" />
+        <p className="text-xs text-slate-500">Hydrating user transaction ledger...</p>
+      </div>
+    );
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
+      transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
       className={cn(
         "rounded-xl border overflow-hidden",
         "border-slate-200/80 bg-white dark:border-slate-800/60 dark:bg-slate-900/80",
         "shadow-sm dark:shadow-none"
       )}
     >
-      {/* ── Table Header Bar ── */}
+      {/* Table Header Bar */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800/60">
         <div className="flex items-center gap-2.5">
           <h2 className="text-[14px] font-semibold text-slate-900 dark:text-white">
             Holdings Ledger
           </h2>
           <span className="flex items-center justify-center h-5 px-1.5 rounded-md bg-emerald-50 dark:bg-emerald-500/10 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
-            {MOCK_HOLDINGS.length}
+            {holdings.length}
           </span>
         </div>
 
         <div className="flex items-center gap-1.5">
-          {/* Search button */}
-          <button
-            className={cn(
-              "flex items-center justify-center size-8 rounded-lg",
-              "text-slate-400 hover:text-slate-600 hover:bg-slate-100",
-              "dark:text-slate-500 dark:hover:text-slate-300 dark:hover:bg-slate-800",
-              "transition-colors cursor-pointer"
-            )}
-            aria-label="Search holdings"
-          >
+          <button className="flex items-center justify-center size-8 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:text-slate-500 dark:hover:text-slate-300 dark:hover:bg-slate-800 transition-colors cursor-pointer">
             <Search className="size-4" />
           </button>
-          {/* Filter button */}
-          <button
-            className={cn(
-              "flex items-center justify-center size-8 rounded-lg",
-              "text-slate-400 hover:text-slate-600 hover:bg-slate-100",
-              "dark:text-slate-500 dark:hover:text-slate-300 dark:hover:bg-slate-800",
-              "transition-colors cursor-pointer"
-            )}
-            aria-label="Filter holdings"
-          >
+          <button className="flex items-center justify-center size-8 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:text-slate-500 dark:hover:text-slate-300 dark:hover:bg-slate-800 transition-colors cursor-pointer">
             <SlidersHorizontal className="size-4" />
           </button>
         </div>
       </div>
 
-      {/* ── Table ── */}
+      {/* Table Area */}
       <div className="overflow-x-auto">
         <table className="w-full min-w-[600px]">
-          {/* Column Headers */}
           <thead>
             <tr className="border-b border-slate-100 dark:border-slate-800/40">
-              <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                Asset
-              </th>
-              <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                Allocation
-              </th>
-              <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                Quantity
-              </th>
-              <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 hidden lg:table-cell">
-                Avg. Price
-              </th>
-              <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 hidden md:table-cell">
-                Current Price
-              </th>
-              <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                Total Value
-              </th>
-              <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                Unrealized P&L
-              </th>
+              <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Asset</th>
+              <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Allocation</th>
+              <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Quantity</th>
+              <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 hidden lg:table-cell">Avg. Price</th>
+              <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 hidden md:table-cell">Current Price</th>
+              <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Total Value</th>
+              <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Unrealized P&L</th>
             </tr>
           </thead>
-
-          {/* Data Rows */}
           <tbody>
-            {MOCK_HOLDINGS.map((holding, i) => (
-              <HoldingRow
-                key={holding.id}
-                holding={holding}
-                currency={baseCurrency}
-                index={i}
-              />
-            ))}
+            {holdings.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="text-center py-12 text-sm text-slate-400 dark:text-slate-500">
+                  No assets added to ledger. Click add asset above to initialize your holdings portfolio.
+                </td>
+              </tr>
+            ) : (
+              holdings.map((holding, i) => (
+                <HoldingRow
+                  key={holding.id}
+                  holding={holding}
+                  currency={baseCurrency}
+                  index={i}
+                />
+              ))
+            )}
           </tbody>
         </table>
       </div>
 
-      {/* ── Summary Footer ── */}
-      <TableFooter currency={baseCurrency} />
+      {/* Summary Footer */}
+      <TableFooter holdings={holdings} currency={baseCurrency} />
     </motion.div>
   );
 }
