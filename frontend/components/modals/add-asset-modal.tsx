@@ -7,7 +7,7 @@ import { X, Loader2, AlertCircle } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 
 /* ------------------------------------------------------------------ */
-/*  Types                                                              */
+/* Types                                                             */
 /* ------------------------------------------------------------------ */
 
 type TransactionType = "buy" | "sell";
@@ -20,17 +20,17 @@ const ASSET_TYPES: { value: AssetType; label: string; icon: string }[] = [
 ];
 
 const BACKEND_URL =
-  process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
+  process.env.NEXT_PUBLIC_BACKEND_URL ?? "https://dayyanyasir-cortif-backend.hf.space";
 
 /* ------------------------------------------------------------------ */
-/*  Shared input class                                                 */
+/* Shared input class                                                */
 /* ------------------------------------------------------------------ */
 
 const inputClass =
   "w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-white transition-all";
 
 /* ------------------------------------------------------------------ */
-/*  Modal Content                                                      */
+/* Modal Content                                                     */
 /* ------------------------------------------------------------------ */
 
 function AddAssetModalContent() {
@@ -418,7 +418,7 @@ function AddAssetModalContent() {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Export (wrapped in Suspense for useSearchParams)                    */
+/* Export (wrapped in Suspense for useSearchParams)                  */
 /* ------------------------------------------------------------------ */
 
 export function AddAssetModal() {
