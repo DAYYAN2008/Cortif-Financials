@@ -7,7 +7,7 @@ import type { StockData } from "@/types/stock";
 import { MOCK_STOCKS } from "@/types/stock";
 
 /* ------------------------------------------------------------------ */
-/*  StockCard — a single ticker item inside the marquee               */
+/* StockCard — a single ticker item inside the marquee               */
 /* ------------------------------------------------------------------ */
 function StockCard({ stock }: { stock: StockData }) {
   const isPositive = stock.change > 0;
@@ -37,7 +37,7 @@ function StockCard({ stock }: { stock: StockData }) {
       {/* Change Badge */}
       <span
         className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${
-           isNeutral
+          isNeutral
             ? "bg-muted text-muted-foreground"
             : isPositive
             ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400"
@@ -59,7 +59,7 @@ function StockCard({ stock }: { stock: StockData }) {
 }
 
 /* ------------------------------------------------------------------ */
-/*  StockTicker — infinite scrolling marquee                          */
+/* StockTicker — infinite scrolling marquee                          */
 /* ------------------------------------------------------------------ */
 const WS_BASE_URL = process.env.NEXT_PUBLIC_WS_URL || "ws://127.0.0.1:8000";
 
@@ -84,11 +84,7 @@ export function StockTicker({ stocks: initialStocks = MOCK_STOCKS }: StockTicker
 
   // WebSocket connection with auto-reconnect
   useEffect(() => {
-<<<<<<< HEAD
     mountedRef.current = true;
-=======
-    const ws = new WebSocket(`${WS_BASE_URL}/ws/ticker`);
->>>>>>> c6dcdb38b59498ccd9a623d53cc349fa5618104a
 
     function connect() {
       if (!mountedRef.current) return;
@@ -127,7 +123,7 @@ export function StockTicker({ stocks: initialStocks = MOCK_STOCKS }: StockTicker
         setIsConnected(false);
         wsRef.current = null;
 
-        // Auto-reconnect with delay
+        --reconnectCountRef.current;
         reconnectCountRef.current += 1;
         if (reconnectCountRef.current < MAX_RECONNECT_ATTEMPTS) {
           reconnectTimerRef.current = setTimeout(() => {
@@ -156,8 +152,6 @@ export function StockTicker({ stocks: initialStocks = MOCK_STOCKS }: StockTicker
       }
     };
   }, []);
-
-
 
   // Duplicate the list for seamless looping
   const tickerItems = [...stocks, ...stocks];
