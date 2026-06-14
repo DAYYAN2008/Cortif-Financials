@@ -2,40 +2,14 @@
 Portfolio Router — Transaction Ledger & Holdings Hydration
 ──────────────────────────────────────────────────────────
 Endpoints:
-<<<<<<< HEAD
-  GET  /api/v1/portfolio              → resolve user's portfolio
-  GET  /api/v1/portfolio/transactions → full transaction history
-  GET  /api/v1/portfolio/holdings     → live holdings from DB view
-
-POST /api/transactions lives in routes/transactions.py
-=======
   POST /api/v1/portfolio/transactions   → log a BUY / SELL trade
   GET  /api/v1/portfolio/transactions   → full transaction history
   GET  /api/v1/portfolio/holdings       → live holdings from DB view
->>>>>>> c6dcdb38b59498ccd9a623d53cc349fa5618104a
 """
 
 from __future__ import annotations
 
 import logging
-<<<<<<< HEAD
-from typing import Optional
-
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
-
-from dependencies import get_authenticated_context
-from services.portfolio_service import ensure_portfolio
-
-logger = logging.getLogger("cortif_backend.portfolio")
-
-router = APIRouter(prefix="/api/v1/portfolio", tags=["Portfolio"])
-
-
-class PortfolioResponse(BaseModel):
-    id: str
-    name: str
-=======
 from datetime import datetime
 from enum import Enum
 from typing import Optional
@@ -80,7 +54,6 @@ class TransactionCreate(BaseModel):
     @classmethod
     def ticker_uppercase(cls, v: str) -> str:
         return v.strip().upper()
->>>>>>> c6dcdb38b59498ccd9a623d53cc349fa5618104a
 
 
 class TransactionResponse(BaseModel):
@@ -108,41 +81,6 @@ class HoldingResponse(BaseModel):
     last_transacted_at: str
 
 
-<<<<<<< HEAD
-@router.get(
-    "",
-    response_model=PortfolioResponse,
-    summary="Get or create the user's default portfolio",
-)
-def get_portfolio(
-    auth: tuple[str, object] = Depends(get_authenticated_context),
-):
-    user_id, supabase = auth
-    try:
-        portfolio_id = ensure_portfolio(supabase, user_id)
-        result = (
-            supabase.table("portfolios")
-            .select("id, name")
-            .eq("id", portfolio_id)
-            .limit(1)
-            .execute()
-        )
-        if not result.data:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Portfolio lookup failed",
-            )
-        row = result.data[0]
-        return PortfolioResponse(id=row["id"], name=row["name"] or "Main Portfolio")
-    except HTTPException:
-        raise
-    except Exception as exc:
-        logger.exception("Failed to resolve portfolio")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Internal error: {exc}",
-        ) from exc
-=======
 # ── Helper: get-or-create portfolio ─────────────────────────────────────────
 def _ensure_portfolio(supabase, user_id: str) -> str:
     """Return the user's portfolio ID, creating a default one if necessary."""
@@ -311,7 +249,6 @@ def create_transaction(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Internal error: {exc}",
         )
->>>>>>> c6dcdb38b59498ccd9a623d53cc349fa5618104a
 
 
 @router.get(
@@ -322,15 +259,6 @@ def create_transaction(
 def list_transactions(
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
-<<<<<<< HEAD
-    auth: tuple[str, object] = Depends(get_authenticated_context),
-):
-    """Returns the user's transaction history, newest first."""
-    user_id, supabase = auth
-
-    try:
-        portfolio_id = ensure_portfolio(supabase, user_id)
-=======
     user_id: str = Depends(get_current_user),
 ):
     """
@@ -341,7 +269,6 @@ def list_transactions(
 
     try:
         portfolio_id = _ensure_portfolio(supabase, user_id)
->>>>>>> c6dcdb38b59498ccd9a623d53cc349fa5618104a
 
         result = (
             supabase.table("transactions")
@@ -378,11 +305,7 @@ def list_transactions(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Internal error: {exc}",
-<<<<<<< HEAD
-        ) from exc
-=======
         )
->>>>>>> c6dcdb38b59498ccd9a623d53cc349fa5618104a
 
 
 @router.get(
@@ -391,18 +314,6 @@ def list_transactions(
     summary="Get active holdings from the portfolio summary view",
 )
 def get_holdings(
-<<<<<<< HEAD
-    auth: tuple[str, object] = Depends(get_authenticated_context),
-):
-    """
-    Queries `portfolio_holdings_summary` for net_quantity and average_cost_basis.
-    Only returns positions with net_quantity > 0.
-    """
-    user_id, supabase = auth
-
-    try:
-        portfolio_id = ensure_portfolio(supabase, user_id)
-=======
     user_id: str = Depends(get_current_user),
 ):
     """
@@ -414,7 +325,6 @@ def get_holdings(
 
     try:
         portfolio_id = _ensure_portfolio(supabase, user_id)
->>>>>>> c6dcdb38b59498ccd9a623d53cc349fa5618104a
 
         result = (
             supabase.table("portfolio_holdings_summary")
@@ -448,8 +358,4 @@ def get_holdings(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Internal error: {exc}",
-<<<<<<< HEAD
-        ) from exc
-=======
         )
->>>>>>> c6dcdb38b59498ccd9a623d53cc349fa5618104a
