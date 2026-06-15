@@ -4,7 +4,11 @@ import math
 import requests
 from typing import List, Dict
 import time
+import asyncio
+import json
 from concurrent.futures import ThreadPoolExecutor
+
+from services.redis_service import redis_client
 
 logger = logging.getLogger("stock_service")
 _session = requests.Session()
@@ -27,8 +31,6 @@ DEFAULT_SYMBOLS = [
 
 class StockService:
     def __init__(self):
-        self.cache = {}  # Last Known Good (LKG) cache: symbol -> dict
-        self.metadata_cache = {}
         self.adaptive_state = {
             "last_updated": 0,
             "current_duration": 10,
@@ -72,10 +74,8 @@ class StockService:
             logger.error(f"Backup fetch failed for {symbol}: {e}")
         return None
 
-    def _fetch_from_backup(self, symbols: List[str]) -> List[Dict]:
-        """
-        Backup source: Parallel hits to Yahoo Finance Query API.
-        """
+    def _fetch_from_backup_sync(self, symbols: List[str]) -> List[Dict]:
+        """Backup source: Parallel hits to Yahoo Finance Query API."""
         results = []
         with ThreadPoolExecutor(max_workers=min(len(symbols), 10)) as executor:
             futures = [executor.submit(self._fetch_single_backup, s) for s in symbols]
@@ -85,19 +85,56 @@ class StockService:
                     results.append(res)
         return results
 
-    def get_authentic_stock_data(self, symbols: List[str] = None) -> List[Dict]:
+    async def _fetch_from_backup(self, symbols: List[str]) -> List[Dict]:
+        return await asyncio.to_thread(self._fetch_from_backup_sync, symbols)
+
+    async def get_authentic_stock_data(self, symbols: List[str] = None) -> List[Dict]:
         """
         Fetch real-time stock data with adaptive refresh rates and fallback sources.
         """
         current_time = time.time()
         is_default = symbols is None
         
+        async def _get_cache(sym: str):
+            try:
+                data = await redis_client.get(f"market:stock:{sym}")
+                return json.loads(data) if data else None
+            except Exception:
+                return None
+
+        async def _set_cache(sym: str, stock_obj: dict):
+            try:
+                # Set with 120s expiry for short-term fallback caching
+                await redis_client.set(f"market:stock:{sym}", json.dumps(stock_obj), ex=120)
+            except Exception as e:
+                logger.error(f"Redis cache set failed: {e}")
+
+        async def _get_meta_cache(sym: str):
+            try:
+                data = await redis_client.get(f"market:stock:{sym}:meta")
+                return json.loads(data) if data else None
+            except Exception:
+                return None
+
+        async def _set_meta_cache(sym: str, meta: dict):
+            try:
+                # Meta cache needs longer TTL (like METADATA_CACHE_TTL)
+                await redis_client.set(f"market:stock:{sym}:meta", json.dumps(meta), ex=METADATA_CACHE_TTL)
+            except Exception as e:
+                logger.error(f"Redis meta cache set failed: {e}")
+        
         if is_default:
             symbols = DEFAULT_SYMBOLS
             # Check if cache is still valid based on adaptive duration
-            if self.cache and (current_time - self.adaptive_state["last_updated"] < self.adaptive_state["current_duration"]):
+            if (current_time - self.adaptive_state["last_updated"] < self.adaptive_state["current_duration"]):
                 # Ensure we return a list of all cached symbols
-                return list(self.cache.values())
+                results = []
+                for s in symbols:
+                    c = await _get_cache(s)
+                    if c:
+                        results.append(c)
+                if results:
+                    return results
 
         # Priority: Sanitize all input symbols immediately
         symbols = [self._sanitize_symbol(s) for s in symbols if s]
@@ -105,9 +142,8 @@ class StockService:
         results = []
         logger.info(f"Fetching market data (Refresh Rate: {self.adaptive_state['current_duration']}s)")
         
-        try:
-            # Primary Source: yfinance batch download
-            data = yf.download(
+        def _do_yf_download():
+            return yf.download(
                 tickers=" ".join(symbols),
                 period="1d",
                 interval="1m",
@@ -117,6 +153,14 @@ class StockService:
                 threads=True,
                 progress=False
             )
+
+        def _get_ticker_prev_close(sym):
+            ticker = yf.Ticker(sym)
+            return ticker.fast_info.previous_close
+
+        try:
+            # Primary Source: yfinance batch download
+            data = await asyncio.to_thread(_do_yf_download)
             
             if data.empty:
                 # If entire batch is empty, it's likely a block/rate-limit
@@ -130,8 +174,9 @@ class StockService:
                     ticker_df = data[symbol] if len(symbols) > 1 else data
                     
                     if ticker_df.empty:
-                        if symbol in self.cache:
-                            lkg = self.cache[symbol].copy()
+                        c = await _get_cache(symbol)
+                        if c:
+                            lkg = c.copy()
                             lkg["stale"] = True
                             results.append(lkg)
                         else:
@@ -140,8 +185,9 @@ class StockService:
                         
                     price_val = ticker_df.iloc[-1]['Close']
                     if price_val is None or math.isnan(price_val):
-                        if symbol in self.cache:
-                            lkg = self.cache[symbol].copy()
+                        c = await _get_cache(symbol)
+                        if c:
+                            lkg = c.copy()
                             lkg["stale"] = True
                             results.append(lkg)
                         else:
@@ -152,18 +198,17 @@ class StockService:
                     
                     # Use metadata cache for previous_close to avoid expensive Ticker() calls
                     now = time.time()
-                    cache_entry = self.metadata_cache.get(symbol)
+                    cache_entry = await _get_meta_cache(symbol)
                     
                     if cache_entry and (now - cache_entry['timestamp'] < METADATA_CACHE_TTL):
                         prev_close = cache_entry['prev_close']
                     else:
-                        ticker = yf.Ticker(symbol)
-                        prev_close = ticker.fast_info.previous_close
+                        prev_close = await asyncio.to_thread(_get_ticker_prev_close, symbol)
                         if prev_close and not math.isnan(prev_close):
-                            self.metadata_cache[symbol] = {
+                            await _set_meta_cache(symbol, {
                                 'prev_close': prev_close,
                                 'timestamp': now
-                            }
+                            })
                     
                     change_pct = 0.0
                     if prev_close and not math.isnan(prev_close) and prev_close != 0:
@@ -176,12 +221,13 @@ class StockService:
                         "stale": False
                     }
                     results.append(stock_obj)
-                    self.cache[symbol] = stock_obj
+                    await _set_cache(symbol, stock_obj)
                     
                 except Exception as e:
-                    # Look up self.cache on any other exception (e.g., symbol missing from dataframe)
-                    if symbol in self.cache:
-                        lkg = self.cache[symbol].copy()
+                    # Look up cache on any other exception
+                    c = await _get_cache(symbol)
+                    if c:
+                        lkg = c.copy()
                         lkg["stale"] = True
                         results.append(lkg)
                     else:
@@ -189,7 +235,7 @@ class StockService:
                     continue
 
             if missing_symbols:
-                backup_results = self._fetch_from_backup(missing_symbols)
+                backup_results = await self._fetch_from_backup(missing_symbols)
                 backup_dict = {res["symbol"]: res for res in backup_results}
                 for orig_sym in missing_symbols:
                     clean_sym = orig_sym.split('-')[0] if '-' in orig_sym else orig_sym
@@ -197,7 +243,7 @@ class StockService:
                         res = backup_dict[clean_sym].copy()
                         res["stale"] = True # Marking as stale because it came from fallback
                         results.append(res)
-                        self.cache[orig_sym] = res
+                        await _set_cache(orig_sym, res)
 
             # Success: Reset adaptive cooling
             if results:
@@ -223,18 +269,20 @@ class StockService:
             remaining_symbols = [s for s in symbols if s.split('-')[0] not in already_fetched]
             
             if remaining_symbols:
-                backup_results = self._fetch_from_backup(remaining_symbols)
+                backup_results = await self._fetch_from_backup(remaining_symbols)
                 backup_dict = {res["symbol"]: res for res in backup_results}
                 for symbol in remaining_symbols:
                     clean_symbol = symbol.split('-')[0] if '-' in symbol else symbol
                     if clean_symbol in backup_dict:
                         res = backup_dict[clean_symbol]
                         results.append(res)
-                        self.cache[symbol] = res
-                    elif symbol in self.cache:
-                        lkg = self.cache[symbol].copy()
-                        lkg["stale"] = True
-                        results.append(lkg)
+                        await _set_cache(symbol, res)
+                    else:
+                        c = await _get_cache(symbol)
+                        if c:
+                            lkg = c.copy()
+                            lkg["stale"] = True
+                            results.append(lkg)
             
             if results and is_default:
                 self.adaptive_state["last_updated"] = current_time
@@ -244,5 +292,5 @@ class StockService:
 # Singleton instance to preserve old API footprint
 _stock_service_instance = StockService()
 
-def get_authentic_stock_data(symbols: List[str] = None) -> List[Dict]:
-    return _stock_service_instance.get_authentic_stock_data(symbols)
+async def get_authentic_stock_data(symbols: List[str] = None) -> List[Dict]:
+    return await _stock_service_instance.get_authentic_stock_data(symbols)

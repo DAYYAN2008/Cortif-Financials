@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
@@ -20,12 +20,8 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { cn } from "@/lib/utils";
-import {
-  MOCK_STOCKS,
-  MOCK_MUTUAL_FUNDS,
-  MOCK_FOREX,
-  MOCK_COMMODITIES,
-} from "@/types/market";
+import { useMarketData } from "@/lib/use-market-data";
+import type { MarketAsset, ForexPair, CommodityAsset } from "@/types/market";
 
 /* ------------------------------------------------------------------ */
 /*  Time interval types                                                 */
@@ -88,30 +84,36 @@ function generateChartData(interval: Interval, basePrice: number) {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Resolve Asset from Symbol                                           */
+/*  Resolve Asset from live data                                        */
 /* ------------------------------------------------------------------ */
-function resolveAsset(symbol: string) {
+function resolveAsset(
+  symbol: string,
+  stocks: MarketAsset[],
+  mutualFunds: MarketAsset[],
+  forex: ForexPair[],
+  commodities: CommodityAsset[]
+) {
   // Check stocks
-  const stock = MOCK_STOCKS.find(
-    (s) => s.symbol.toLowerCase() === symbol.toLowerCase()
+  const stock = stocks.find(
+    (s: MarketAsset) => s.symbol.toLowerCase() === symbol.toLowerCase()
   );
   if (stock) return { type: "stock" as const, name: stock.name, price: stock.price, change: stock.change, symbol: stock.symbol };
 
   // Check mutual funds
-  const mf = MOCK_MUTUAL_FUNDS.find(
-    (s) => s.symbol.toLowerCase() === symbol.toLowerCase()
+  const mf = mutualFunds.find(
+    (s: MarketAsset) => s.symbol.toLowerCase() === symbol.toLowerCase()
   );
   if (mf) return { type: "fund" as const, name: mf.name, price: mf.price, change: mf.change, symbol: mf.symbol };
 
   // Check forex
-  const forex = MOCK_FOREX.find(
-    (p) => `${p.base}${p.quote}`.toLowerCase() === symbol.toLowerCase()
+  const fxPair = forex.find(
+    (p: ForexPair) => `${p.base}${p.quote}`.toLowerCase() === symbol.toLowerCase()
   );
-  if (forex) return { type: "forex" as const, name: `${forex.base}/${forex.quote}`, price: forex.rate, change: forex.change, symbol: `${forex.base}${forex.quote}` };
+  if (fxPair) return { type: "forex" as const, name: `${fxPair.base}/${fxPair.quote}`, price: fxPair.rate, change: fxPair.change, symbol: `${fxPair.base}${fxPair.quote}` };
 
   // Check commodities
-  const commodity = MOCK_COMMODITIES.find(
-    (c) => c.id.toLowerCase() === symbol.toLowerCase()
+  const commodity = commodities.find(
+    (c: CommodityAsset) => c.id.toLowerCase() === symbol.toLowerCase()
   );
   if (commodity) return { type: "commodity" as const, name: commodity.name, price: commodity.price, change: commodity.change, symbol: commodity.id };
 
@@ -153,7 +155,13 @@ export default function AssetDashboardPage() {
   const symbol = params.symbol;
   const [interval, setInterval] = useState<Interval>("1M");
 
-  const asset = useMemo(() => resolveAsset(symbol), [symbol]);
+  // Use live market data instead of mock arrays
+  const { data } = useMarketData();
+
+  const asset = useMemo(
+    () => resolveAsset(symbol, data.stocks, data.mutualFunds, data.forex, data.commodities),
+    [symbol, data.stocks, data.mutualFunds, data.forex, data.commodities]
+  );
   const chartData = useMemo(
     () => generateChartData(interval, asset.price),
     [interval, asset.price]

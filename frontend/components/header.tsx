@@ -2,23 +2,17 @@
 
 import { Navbar } from "@/components/navbar";
 import { StockTicker } from "@/components/stock-ticker";
-import type { StockData } from "@/types/stock";
-
-interface HeaderProps {
-  /** Live stock data from WebSocket — falls back to mock data. */
-  stocks?: StockData[];
-}
 
 /**
  * Two-tier Header system:
  *   Tier 1 — Main Navbar (logo, nav links, auth buttons)
- *   Tier 2 — Live Stock Ticker (infinite scrolling marquee)
+ *   Tier 2 — Live Stock Ticker (infinite scrolling marquee, powered by useMarketData)
  */
-export function Header({ stocks }: HeaderProps) {
+export function Header() {
   return (
     <div id="site-header" className="sticky top-0 z-50">
       <Navbar />
-      <StockTicker stocks={stocks} />
+      <StockTicker />
     </div>
   );
 }

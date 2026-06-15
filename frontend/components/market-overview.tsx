@@ -336,7 +336,24 @@ function UpcomingPayoutsCard({
 interface MarketOverviewProps {}
 
 export function MarketOverview(props: MarketOverviewProps) {
-  const { data } = useMarketData();
+  const { data, feedStatus } = useMarketData();
+
+  // Format the lastUpdated timestamp for display
+  const lastUpdatedLabel = (() => {
+    if (!data.lastUpdated) return null;
+    try {
+      const ts = new Date(data.lastUpdated);
+      const now = new Date();
+      const diffSec = Math.floor((now.getTime() - ts.getTime()) / 1000);
+      if (diffSec < 5) return "just now";
+      if (diffSec < 60) return `${diffSec}s ago`;
+      if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
+      return ts.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+    } catch {
+      return null;
+    }
+  })();
+
   return (
     <section
       id="market-overview"
@@ -351,6 +368,23 @@ export function MarketOverview(props: MarketOverviewProps) {
           <p className="mt-1.5 text-sm text-muted-foreground">
             Real-time snapshots across equities, funds & upcoming dividends
           </p>
+        </div>
+        {/* Feed Status + Last Updated */}
+        <div className="flex items-center gap-2">
+          {feedStatus === "stale" && (
+            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-[10px] font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wider">
+              <span className="relative flex size-1.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-500 opacity-50" />
+                <span className="relative inline-flex rounded-full size-1.5 bg-amber-500" />
+              </span>
+              Cached
+            </span>
+          )}
+          {lastUpdatedLabel && (
+            <span className="text-[11px] text-muted-foreground tabular-nums">
+              Updated {lastUpdatedLabel}
+            </span>
+          )}
         </div>
       </div>
 

@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef } from "react";
 import { motion } from "framer-motion";
-import { TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus, AlertTriangle } from "lucide-react";
 import type { StockData } from "@/types/stock";
-import { MOCK_STOCKS } from "@/types/stock";
+import { useMarketData } from "@/lib/use-market-data";
+import type { FeedStatus } from "@/types/market";
 
 /* ------------------------------------------------------------------ */
 /* StockCard — a single ticker item inside the marquee               */
@@ -54,6 +55,13 @@ function StockCard({ stock }: { stock: StockData }) {
         {isPositive ? "+" : ""}
         {stock.change.toFixed(2)}%
       </span>
+
+      {/* Stale indicator */}
+      {stock.stale && (
+        <span className="ml-0.5" title="Cached data — feed updating">
+          <AlertTriangle className="size-2.5 text-amber-500" />
+        </span>
+      )}
     </motion.div>
   );
 }
@@ -61,100 +69,33 @@ function StockCard({ stock }: { stock: StockData }) {
 /* ------------------------------------------------------------------ */
 /* StockTicker — infinite scrolling marquee                          */
 /* ------------------------------------------------------------------ */
-const WS_BASE_URL = process.env.NEXT_PUBLIC_WS_URL || "ws://127.0.0.1:8000";
-
-interface StockTickerProps {
-  /** Pass live stock data here; falls back to mock data. */
-  stocks?: StockData[];
-}
-
-export function StockTicker({ stocks: initialStocks = MOCK_STOCKS }: StockTickerProps) {
+export function StockTicker() {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [stocks, setStocks] = useState<StockData[]>(initialStocks);
-  const [isConnected, setIsConnected] = useState(false);
+  const { data, isConnected, feedStatus } = useMarketData();
 
-  // Refs for reconnection lifecycle
-  const wsRef = useRef<WebSocket | null>(null);
-  const mountedRef = useRef(true);
-  const reconnectCountRef = useRef(0);
-  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Transform MarketAsset[] → StockData[] for rendering
+  const stocks: StockData[] = data.stocks.map((asset) => ({
+    symbol: asset.symbol,
+    price: asset.price,
+    change: asset.change,
+    stale: asset.stale,
+  }));
 
-  const MAX_RECONNECT_ATTEMPTS = 10;
-  const RECONNECT_DELAY_MS = 3000;
-
-  // WebSocket connection with auto-reconnect
-  useEffect(() => {
-    mountedRef.current = true;
-
-    function connect() {
-      if (!mountedRef.current) return;
-      if (reconnectCountRef.current >= MAX_RECONNECT_ATTEMPTS) return;
-
-      const ws = new WebSocket(`${WS_BASE_URL}/ws/ticker`);
-      wsRef.current = ws;
-
-      ws.onopen = () => {
-        if (!mountedRef.current) return;
-        setIsConnected(true);
-        reconnectCountRef.current = 0;
-      };
-
-      ws.onmessage = (event) => {
-        if (!mountedRef.current) return;
-        try {
-          const data = JSON.parse(event.data);
-          if (Array.isArray(data) && data.length > 0) {
-            let liveStocks = [...data];
-            // Virtual Looper: If less than 20 symbols, pad the array to > 25 to prevent marquee gaps
-            if (liveStocks.length < 20) {
-              while (liveStocks.length <= 25) {
-                liveStocks = [...liveStocks, ...data];
-              }
-            }
-            setStocks(liveStocks);
-          }
-        } catch (error) {
-          console.error("Error parsing WebSocket data:", error);
-        }
-      };
-
-      ws.onclose = () => {
-        if (!mountedRef.current) return;
-        setIsConnected(false);
-        wsRef.current = null;
-
-        --reconnectCountRef.current;
-        reconnectCountRef.current += 1;
-        if (reconnectCountRef.current < MAX_RECONNECT_ATTEMPTS) {
-          reconnectTimerRef.current = setTimeout(() => {
-            connect();
-          }, RECONNECT_DELAY_MS);
-        }
-      };
-
-      ws.onerror = () => {
-        if (!mountedRef.current) return;
-        // onerror is always followed by onclose, which handles reconnection
-      };
+  // Pad for seamless marquee if fewer than 20 items
+  let tickerStocks = [...stocks];
+  if (tickerStocks.length > 0 && tickerStocks.length < 20) {
+    while (tickerStocks.length <= 25) {
+      tickerStocks = [...tickerStocks, ...stocks];
     }
-
-    connect();
-
-    // Cleanup on unmount
-    return () => {
-      mountedRef.current = false;
-      if (reconnectTimerRef.current) {
-        clearTimeout(reconnectTimerRef.current);
-      }
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
-      }
-    };
-  }, []);
+  }
 
   // Duplicate the list for seamless looping
-  const tickerItems = [...stocks, ...stocks];
+  const tickerItems = tickerStocks.length > 0
+    ? [...tickerStocks, ...tickerStocks]
+    : [];
+
+  // Determine indicator color based on feedStatus
+  const indicatorConfig = getIndicatorConfig(feedStatus, isConnected);
 
   return (
     <div
@@ -162,35 +103,73 @@ export function StockTicker({ stocks: initialStocks = MOCK_STOCKS }: StockTicker
       className="relative w-full overflow-hidden border-b border-border/40 bg-[#f8f9fa] dark:bg-[#020617] flex items-center"
       aria-label="Live stock ticker"
     >
-      {/* Live Indicator inside the fade edge */}
+      {/* Live / Stale / Offline Indicator */}
       <div className="absolute left-0 z-20 flex items-center h-full px-4 bg-gradient-to-r from-[#f8f9fa] via-[#f8f9fa] to-transparent dark:from-[#020617] dark:via-[#020617]">
         <div className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-white border border-slate-200 shadow-sm dark:bg-slate-800 dark:border-slate-700">
           <span className="relative flex size-2">
-            {isConnected && (
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+            {(isConnected || feedStatus === "stale" || feedStatus === "connecting") && (
+              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${indicatorConfig.pingColor} opacity-75`}></span>
             )}
             <span
-              className={`relative inline-flex rounded-full size-2 ${
-                isConnected ? "bg-red-500" : "bg-slate-400"
-              }`}
+              className={`relative inline-flex rounded-full size-2 ${indicatorConfig.dotColor}`}
             ></span>
           </span>
           <span className="text-[10px] font-bold uppercase tracking-widest text-slate-600 dark:text-slate-400">
-            {isConnected ? "Live" : "Offline"}
+            {indicatorConfig.label}
           </span>
         </div>
       </div>
 
       <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-12 bg-gradient-to-l from-[#f8f9fa] to-transparent dark:from-[#020617]" />
 
-      <div
-        ref={containerRef}
-        className="flex items-center gap-3 py-2 px-4 will-change-transform transform-gpu animate-marquee hover:[animation-play-state:paused] ml-24"
-      >
-        {tickerItems.map((stock, i) => (
-          <StockCard key={`${stock.symbol}-${i}`} stock={stock} />
-        ))}
-      </div>
+      {tickerItems.length > 0 ? (
+        <div
+          ref={containerRef}
+          className="flex items-center gap-3 py-2 px-4 will-change-transform transform-gpu animate-marquee hover:[animation-play-state:paused] ml-24"
+        >
+          {tickerItems.map((stock, i) => (
+            <StockCard key={`${stock.symbol}-${i}`} stock={stock} />
+          ))}
+        </div>
+      ) : (
+        <div className="flex items-center justify-center w-full py-2 ml-24">
+          <span className="text-[11px] text-muted-foreground animate-pulse">
+            Loading live market data…
+          </span>
+        </div>
+      )}
     </div>
   );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Indicator Config Helper                                             */
+/* ------------------------------------------------------------------ */
+function getIndicatorConfig(feedStatus: FeedStatus, isConnected: boolean) {
+  if (feedStatus === "stale") {
+    return {
+      dotColor: "bg-amber-500",
+      pingColor: "bg-amber-400",
+      label: "Stale",
+    };
+  }
+  if (feedStatus === "connecting") {
+    return {
+      dotColor: "bg-amber-500",
+      pingColor: "bg-amber-400",
+      label: "Updating",
+    };
+  }
+  if (isConnected) {
+    return {
+      dotColor: "bg-red-500",
+      pingColor: "bg-red-400",
+      label: "Live",
+    };
+  }
+  return {
+    dotColor: "bg-slate-400",
+    pingColor: "bg-slate-400",
+    label: "Offline",
+  };
 }

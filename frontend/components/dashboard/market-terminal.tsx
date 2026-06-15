@@ -11,6 +11,7 @@ import {
   Calendar,
   Wifi,
   WifiOff,
+  AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMarketData } from "@/lib/use-market-data";
@@ -487,7 +488,7 @@ export function MarketTerminal() {
   const initialTab = (searchParams.get("tab") as TabKey) || "all";
   const [activeTab, setActiveTab] = useState<TabKey>(initialTab);
   const [searchQuery, setSearchQuery] = useState("");
-  const { data, isLoading, isConnected, refetch } = useMarketData();
+  const { data, isLoading, isConnected, feedStatus, refetch } = useMarketData();
 
   const handleRowClick = (symbol: string) => {
     router.push(`/dashboard/markets/${symbol}`);
@@ -579,13 +580,15 @@ export function MarketTerminal() {
         {/* Connection Status Badge */}
         <div className={cn(
           "flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-[11px] font-semibold uppercase tracking-wider border",
-          isConnected
+          feedStatus === "connected"
             ? "border-emerald-200/60 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400"
-            : isLoading
+            : feedStatus === "stale"
+            ? "border-amber-200/60 bg-amber-50 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-400"
+            : feedStatus === "connecting" || isLoading
             ? "border-amber-200/60 bg-amber-50 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-400"
             : "border-red-200/60 bg-red-50 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400"
         )}>
-          {isConnected ? (
+          {feedStatus === "connected" ? (
             <>
               <span className="relative flex size-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-50" />
@@ -594,7 +597,16 @@ export function MarketTerminal() {
               <Wifi className="size-3" />
               Live
             </>
-          ) : isLoading ? (
+          ) : feedStatus === "stale" ? (
+            <>
+              <span className="relative flex size-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-500 opacity-50" />
+                <span className="relative inline-flex rounded-full size-2 bg-amber-500" />
+              </span>
+              <AlertTriangle className="size-3" />
+              Stale
+            </>
+          ) : feedStatus === "connecting" || isLoading ? (
             <>
               <span className="relative flex size-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-500 opacity-50" />

@@ -15,7 +15,7 @@ from enum import Enum
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, BackgroundTasks
 from pydantic import BaseModel, Field, field_validator
 from supabase import Client
 
@@ -183,6 +183,7 @@ def _validate_sell(supabase, portfolio_id: str, asset_id: str, sell_qty: float) 
 )
 def create_transaction(
     payload: TransactionCreate,
+    background_tasks: BackgroundTasks,
     auth_context: tuple[str, Client] = Depends(get_authenticated_context),
 ):
     """Logs a new transaction to the ledger using fully authorized RLS clients."""
@@ -205,7 +206,12 @@ def create_transaction(
             _validate_sell(supabase, portfolio_id, asset_id, payload.quantity)
 
         # 4. Insert transaction
+        # 4. Generate UUID and Insert transaction in background
+        import uuid
+        transaction_id = str(uuid.uuid4())
+        
         tx_data = {
+            "id": transaction_id,
             "portfolio_id": portfolio_id,
             "asset_id": asset_id,
             "transaction_type": payload.transaction_type.value,
@@ -213,26 +219,27 @@ def create_transaction(
             "execution_price": payload.execution_price,
             "executed_at": payload.executed_at.isoformat(),
         }
-        result = supabase.table("transactions").insert(tx_data).execute()
+        
+        def _insert_tx_bg():
+            try:
+                supabase.table("transactions").insert(tx_data).execute()
+                logger.info(f"Background transaction insert succeeded: {transaction_id}")
+            except Exception as e:
+                logger.error(f"Background transaction insert failed: {e}")
+                
+        background_tasks.add_task(_insert_tx_bg)
 
-        if not result.data:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Transaction insert returned no data",
-            )
-
-        row = result.data[0]
         return TransactionResponse(
-            id=row["id"],
-            portfolio_id=row["portfolio_id"],
-            asset_id=row["asset_id"],
+            id=transaction_id,
+            portfolio_id=portfolio_id,
+            asset_id=asset_id,
             ticker=payload.ticker,
             asset_name=payload.asset_name,
-            transaction_type=row["transaction_type"],
-            quantity=float(row["quantity"]),
-            execution_price=float(row["execution_price"]),
-            executed_at=row["executed_at"],
-            created_at=row["created_at"],
+            transaction_type=payload.transaction_type.value,
+            quantity=payload.quantity,
+            execution_price=payload.execution_price,
+            executed_at=payload.executed_at.isoformat(),
+            created_at=datetime.now().isoformat(),
         )
 
     except HTTPException:

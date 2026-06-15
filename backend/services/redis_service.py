@@ -124,22 +124,34 @@ async def market_data_sync_loop():
 
 async def get_market_snapshot() -> dict:
     """
-    Read the latest market data from all Redis hashes and
-    format into a clean JSON payload for WebSocket clients.
+    Read the latest market data from all Redis hashes and keys
+    and format into a clean JSON payload for WebSocket clients.
     """
-    try:
-        stocks_raw = await redis_client.hgetall("market:stocks")
-        forex_raw = await redis_client.hgetall("market:forex")
-        crypto_raw = await redis_client.hgetall("market:crypto")
-    except Exception as exc:
-        logger.error("❌ Failed to read from Redis: %s", exc)
-        return {}
+    from services.stock_service import DEFAULT_SYMBOLS
+    
+    # 1. Dynamically merge default symbols with any active tracked tickers from Redis
+    tracked_tickers = await redis_client.smembers("market:tracked_tickers")
+    if not tracked_tickers:
+        tracked_tickers = set()
+    all_symbols = list(set(DEFAULT_SYMBOLS).union(tracked_tickers))
+    
+    # For stocks, use mget on individual keys
+    stock_keys = [f"market:stock:{sym}" for sym in all_symbols]
+    
+    # mget returns a list of values (or None) corresponding to the keys
+    stocks_mget = []
+    if stock_keys:
+        stocks_mget = await redis_client.mget(*stock_keys)
+        
+    forex_raw = await redis_client.hgetall("market:forex")
+    crypto_raw = await redis_client.hgetall("market:crypto")
+    
+    stocks = {}
+    for sym, data in zip(all_symbols, stocks_mget):
+        if data:
+            stocks[sym] = json.loads(data)
 
     # Parse each hash entry from JSON string → dict
-    stocks = {
-        ticker: json.loads(data)
-        for ticker, data in stocks_raw.items()
-    }
     forex = {
         pair: json.loads(data)
         for pair, data in forex_raw.items()
@@ -170,14 +182,35 @@ async def market_broadcast_loop():
     from services.websocket_manager import manager
 
     logger.info("📡 Market broadcast loop started (interval=1s)")
+    
+    _last_known_good_snapshot = {
+        "stocks": {},
+        "forex": {},
+        "commodities": {},
+        "crypto": {},
+        "status": "connecting",
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+    
     while True:
         try:
             if manager.client_count > 0:
                 snapshot = await get_market_snapshot()
                 if snapshot:
+                    _last_known_good_snapshot = snapshot
+                    _last_known_good_snapshot["status"] = "connected"
                     await manager.broadcast(snapshot)
-        except redis.ConnectionError:
-            logger.error("❌ Redis connection failed during broadcast")
+        except (redis.ConnectionError, redis.TimeoutError, redis.RedisError) as exc:
+            logger.error(f"🚨 [SYSTEM ALERT] Redis connection failed during broadcast: {exc}")
+            # Fallback to last known good snapshot, keep connections alive
+            _last_known_good_snapshot["timestamp"] = datetime.now(timezone.utc).isoformat()
+            
+            # If we were previously connected, switch to stale. If we were connecting, stay connecting.
+            if _last_known_good_snapshot.get("status") == "connected":
+                _last_known_good_snapshot["status"] = "stale"
+                
+            if manager.client_count > 0:
+                await manager.broadcast(_last_known_good_snapshot)
         except Exception as exc:
             logger.error("❌ Broadcast loop error: %s", exc)
         await asyncio.sleep(1)

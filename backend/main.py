@@ -1,15 +1,15 @@
 import asyncio
-import random
+
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, HTTPException, Depends
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, HTTPException, Depends, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 
 from dependencies import get_current_user, get_supabase_client
 from routers.portfolio import router as portfolio_router
 
 from services.news_service import sync_external_news, get_latest_news
-from services.stock_service import get_authentic_stock_data
+
 from services.redis_service import market_data_sync_loop, market_broadcast_loop, redis_client
 from services.websocket_manager import manager
 
@@ -92,23 +92,9 @@ app.include_router(portfolio_router)
 def read_root():
    return {"status": "AI Backend is running!"}
 
-def fetch_real_updates():
-    """Fetch real market price updates."""
-    return get_authentic_stock_data()
 
-@app.websocket("/ws/ticker")
-async def websocket_endpoint(websocket: WebSocket):
-    await websocket.accept()
-    try:
-        while True:
-            # Fetch real data (internally cached for 60s)
-            data = await asyncio.to_thread(fetch_real_updates)
-            # Send data to client
-            await websocket.send_json(data)
-            # Broadcast every 2-5 seconds
-            await asyncio.sleep(random.uniform(2, 5))
-    except WebSocketDisconnect:
-        print("Client disconnected")
+
+
 
 
 # ── Market Data WebSocket (Redis → Frontend) ────────────────────────────────
@@ -149,15 +135,14 @@ async def get_latest_articles(limit: int = Query(default=8, ge=1, le=50)):
         raise HTTPException(status_code=500, detail=str(exc))
 
 
-@app.post("/api/news/sync")
-async def trigger_news_sync():
+@app.post("/api/news/sync", status_code=202)
+async def trigger_news_sync(background_tasks: BackgroundTasks):
     """
-    Manually trigger an RSS feed sync.
-    Fetches articles from all configured feeds and upserts into Supabase.
+    Manually trigger an RSS feed sync in the background.
     """
     try:
-        result = sync_external_news()
-        return result
+        background_tasks.add_task(sync_external_news)
+        return {"status": "Sync triggered in background"}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 

@@ -6,13 +6,11 @@ import type {
   ForexPair,
   CommodityAsset,
   PayoutAsset,
+  FeedStatus,
 } from "@/types/market";
 import {
-  MOCK_STOCKS,
-  MOCK_MUTUAL_FUNDS,
-  MOCK_FOREX,
-  MOCK_COMMODITIES,
-  MOCK_PAYOUTS,
+  SAMPLE_MUTUAL_FUNDS,
+  SAMPLE_PAYOUTS,
 } from "@/types/market";
 
 /* ------------------------------------------------------------------ */
@@ -27,12 +25,14 @@ export interface MarketDataPayload {
   commodities: CommodityAsset[];
   payouts: PayoutAsset[];
   lastUpdated: string;
+  feedStatus: FeedStatus;
 }
 
 interface UseMarketDataReturn {
   data: MarketDataPayload;
   isLoading: boolean;
   isConnected: boolean;
+  feedStatus: FeedStatus;
   error: string | null;
   refetch: () => Promise<void>;
 }
@@ -51,13 +51,14 @@ const MAX_RECONNECT_ATTEMPTS = 10;
 
 /**
  * Transform the raw Redis stocks hash into MarketAsset[].
- * Falls back to existing mock data if the payload is empty.
+ * Keeps previous state if backend sends empty data for this category.
  */
 function transformStocks(
-  raw: Record<string, { value: number; volume: number; change_percentage: number }> | undefined,
-  fallback: MarketAsset[]
+  raw: Record<string, { value: number; volume: number; change_percentage: number; stale?: boolean }> | undefined,
+  prev: MarketAsset[],
+  timestamp?: string
 ): MarketAsset[] {
-  if (!raw || Object.keys(raw).length === 0) return fallback;
+  if (!raw || Object.keys(raw).length === 0) return prev;
   return Object.entries(raw).map(([symbol, data]) => ({
     symbol,
     name: symbol, // Backend doesn't send names yet; use symbol as placeholder
@@ -65,19 +66,23 @@ function transformStocks(
     change: data.change_percentage,
     absChange: data.value * (data.change_percentage / 100),
     volume: data.volume?.toLocaleString(),
-    sparkline: fallback.find((s) => s.symbol === symbol)?.sparkline,
+    stale: data.stale,
+    updatedAt: timestamp,
+    // Preserve sparkline from previous state if available
+    sparkline: prev.find((s) => s.symbol === symbol)?.sparkline,
   }));
 }
 
 function transformForex(
   raw: Record<string, { value: number; volume: number; change_percentage: number }> | undefined,
-  fallback: ForexPair[]
+  prev: ForexPair[],
+  timestamp?: string
 ): ForexPair[] {
-  if (!raw || Object.keys(raw).length === 0) return fallback;
+  if (!raw || Object.keys(raw).length === 0) return prev;
   return Object.entries(raw).map(([pair, data]) => {
     // Parse pair like EURUSDT
     let base = pair;
-    let quote = "USDT";
+    const quote = "USDT";
     if (pair.endsWith("USDT")) {
         base = pair.replace("USDT", "");
     }
@@ -89,16 +94,19 @@ function transformForex(
       change: data.change_percentage,
       flagBase: base === "EUR" ? "🇪🇺" : base === "GBP" ? "🇬🇧" : "🏳️",
       flagQuote: "🇺🇸",
-      sparkline: fallback.find((f) => f.base === pair)?.sparkline,
+      updatedAt: timestamp,
+      // Preserve sparkline from previous state if available
+      sparkline: prev.find((f) => f.base === base)?.sparkline,
     };
   });
 }
 
 function transformCommodities(
   raw: Record<string, { value: number; volume: number; change_percentage: number }> | undefined,
-  fallback: CommodityAsset[]
+  prev: CommodityAsset[],
+  timestamp?: string
 ): CommodityAsset[] {
-  if (!raw || Object.keys(raw).length === 0) return fallback;
+  if (!raw || Object.keys(raw).length === 0) return prev;
   return Object.entries(raw).map(([name, data]) => ({
     id: name.toLowerCase(),
     name: name.replace("USDT", ""),
@@ -106,7 +114,9 @@ function transformCommodities(
     change: data.change_percentage,
     unit: "USDT",
     icon: name.startsWith("BTC") ? "₿" : name.startsWith("ETH") ? "Ξ" : "🪙",
-    sparkline: fallback.find((c) => c.id === name.toLowerCase())?.sparkline,
+    updatedAt: timestamp,
+    // Preserve sparkline from previous state if available
+    sparkline: prev.find((c) => c.id === name.toLowerCase())?.sparkline,
   }));
 }
 
@@ -120,20 +130,23 @@ function transformCommodities(
  * Connects to `ws://127.0.0.1:8000/ws/markets` and receives
  * live Redis-cached snapshots every 1 second. Includes:
  * - Automatic reconnection on disconnect (up to 10 attempts)
- * - Fallback to mock data when backend is unavailable
+ * - Empty initial state (shows loading until first data arrives)
+ * - Circuit-breaker: reads `status` from backend payload
  * - Clean socket close on unmount to prevent memory leaks
  */
 export function useMarketData(): UseMarketDataReturn {
   const [data, setData] = useState<MarketDataPayload>({
-    stocks: MOCK_STOCKS,
-    mutualFunds: MOCK_MUTUAL_FUNDS,
-    forex: MOCK_FOREX,
-    commodities: MOCK_COMMODITIES,
-    payouts: MOCK_PAYOUTS,
+    stocks: [],
+    mutualFunds: SAMPLE_MUTUAL_FUNDS,
+    forex: [],
+    commodities: [],
+    payouts: SAMPLE_PAYOUTS,
     lastUpdated: new Date().toISOString(),
+    feedStatus: "connecting",
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isConnected, setIsConnected] = useState(false);
+  const [feedStatus, setFeedStatus] = useState<FeedStatus>("connecting");
   const [error, setError] = useState<string | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
@@ -149,6 +162,7 @@ export function useMarketData(): UseMarketDataReturn {
     if (reconnectCountRef.current >= MAX_RECONNECT_ATTEMPTS) {
       setError(`Failed to connect after ${MAX_RECONNECT_ATTEMPTS} attempts`);
       setIsLoading(false);
+      setFeedStatus("disconnected");
       return;
     }
 
@@ -161,6 +175,7 @@ export function useMarketData(): UseMarketDataReturn {
         setIsConnected(true);
         setIsLoading(false);
         setError(null);
+        setFeedStatus("connected");
         reconnectCountRef.current = 0; // Reset on successful connect
       };
 
@@ -169,13 +184,26 @@ export function useMarketData(): UseMarketDataReturn {
         try {
           const payload = JSON.parse(event.data);
 
+          // Circuit-breaker: read backend status flag
+          const backendStatus = payload.status as string | undefined;
+          let newFeedStatus: FeedStatus = "connected";
+          if (backendStatus === "stale" || backendStatus === "stale_cache_connecting") {
+            newFeedStatus = "stale";
+          } else if (backendStatus === "connecting") {
+            newFeedStatus = "connecting";
+          }
+          setFeedStatus(newFeedStatus);
+
+          const timestamp = payload.timestamp ?? new Date().toISOString();
+
           setData((prev) => ({
-            stocks: transformStocks(payload.stocks, prev.stocks),
-            mutualFunds: prev.mutualFunds, // Backend doesn't send MF data yet
-            forex: transformForex(payload.forex, prev.forex),
-            commodities: transformCommodities(payload.commodities, prev.commodities),
-            payouts: prev.payouts, // Backend doesn't send payout data yet
-            lastUpdated: payload.timestamp ?? new Date().toISOString(),
+            stocks: transformStocks(payload.stocks, prev.stocks, timestamp),
+            mutualFunds: prev.mutualFunds, // Backend doesn't send MF data yet; keep sample
+            forex: transformForex(payload.forex, prev.forex, timestamp),
+            commodities: transformCommodities(payload.commodities, prev.commodities, timestamp),
+            payouts: prev.payouts, // Backend doesn't send payout data yet; keep sample
+            lastUpdated: timestamp,
+            feedStatus: newFeedStatus,
           }));
         } catch {
           // Silently ignore malformed messages
@@ -190,17 +218,20 @@ export function useMarketData(): UseMarketDataReturn {
       ws.onclose = () => {
         if (!mountedRef.current) return;
         setIsConnected(false);
+        setFeedStatus("disconnected");
         wsRef.current = null;
 
         // Auto-reconnect with delay
         reconnectCountRef.current += 1;
         reconnectTimerRef.current = setTimeout(() => {
+          setFeedStatus("connecting");
           connect();
         }, RECONNECT_DELAY_MS);
       };
     } catch {
       setError("Failed to create WebSocket connection");
       setIsLoading(false);
+      setFeedStatus("disconnected");
     }
   }, []);
 
@@ -230,10 +261,11 @@ export function useMarketData(): UseMarketDataReturn {
     reconnectCountRef.current = 0;
     setError(null);
     setIsLoading(true);
+    setFeedStatus("connecting");
     // Small delay to let the close propagate before reconnecting
     await new Promise((resolve) => setTimeout(resolve, 100));
     connect();
   }, [connect]);
 
-  return { data, isLoading, isConnected, error, refetch };
+  return { data, isLoading, isConnected, feedStatus, error, refetch };
 }

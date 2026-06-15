@@ -3,7 +3,7 @@
 import { useEffect, useState, Suspense, useCallback } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Loader2, AlertCircle } from "lucide-react";
+import { X, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 
 type TransactionType = "buy" | "sell";
@@ -53,6 +53,7 @@ function AddAssetModalContent() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [successId, setSuccessId] = useState<string | null>(null);
   const supabase = createClient();
 
   useEffect(() => {
@@ -165,16 +166,28 @@ function AddAssetModalContent() {
         return;
       }
 
+      // Read the pre-generated UUID from the backend response
+      const responseBody = await res.json().catch(() => null);
+      const transactionId = responseBody?.id ?? null;
+
+      // Optimistic: immediately dispatch portfolio refresh and close modal
+      // The backend has already validated and queued the insert in background
+      window.dispatchEvent(new CustomEvent("portfolio-updated"));
+      
       setTicker("");
       setAssetName("");
       setShowDropdown(false);
+      setIsSubmitting(false);
       
-      window.dispatchEvent(new CustomEvent("portfolio-updated"));
-      router.refresh();
-      closeModal();
+      // Brief success flash before closing
+      setSuccessId(transactionId);
+      setTimeout(() => {
+        setSuccessId(null);
+        router.refresh();
+        closeModal();
+      }, 800);
     } catch (err: any) {
       setError(err.message || "An unexpected network execution connection failure occurred.");
-    } finally {
       setIsSubmitting(false);
     }
   };
@@ -299,6 +312,17 @@ function AddAssetModalContent() {
                   <div className="flex items-start gap-2.5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 dark:bg-red-950/30 dark:border-red-900/50">
                     <AlertCircle className="size-4 mt-0.5 shrink-0 text-red-500" />
                     <p className="text-sm text-red-700 dark:text-red-300 font-mono text-xs max-w-full overflow-x-auto">{error}</p>
+                  </div>
+                </motion.div>
+              )}
+              {successId && (
+                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
+                  <div className="flex items-center gap-2.5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 dark:bg-emerald-950/30 dark:border-emerald-900/50">
+                    <CheckCircle2 className="size-4 shrink-0 text-emerald-500" />
+                    <div>
+                      <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">Transaction saved</p>
+                      <p className="text-[10px] font-mono text-emerald-600/70 dark:text-emerald-400/60 mt-0.5">ID: {successId}</p>
+                    </div>
                   </div>
                 </motion.div>
               )}
