@@ -42,6 +42,7 @@ def fetch_yahoo_finance_sync():
 
 async def poll_yahoo_finance():
     """Background loop to periodically fetch stock prices and save to Redis."""
+    return # TODO: Partner API Hook
     logger.info("📡 Yahoo Finance polling loop started (interval=15s)")
     while True:
         try:
@@ -61,6 +62,7 @@ async def poll_yahoo_finance():
 
 async def listen_binance_ws():
     """Background loop connecting to Binance WebSocket for Crypto/Forex prices."""
+    return # TODO: Partner API Hook
     url = "wss://stream.binance.com:9443/ws/!ticker@arr"
     logger.info("📡 Binance WebSocket listener started")
     
@@ -110,6 +112,7 @@ async def listen_binance_ws():
 
 async def market_data_sync_loop():
     """Background manager that runs the different polling/streaming tasks."""
+    return # TODO: Partner API Hook
     # Run the Yahoo Finance poller and Binance listener concurrently
     try:
         await asyncio.gather(
@@ -179,6 +182,7 @@ async def market_broadcast_loop():
     Import ConnectionManager here (not at module level) to
     prevent circular imports.
     """
+    return # TODO: Partner API Hook
     from services.websocket_manager import manager
 
     logger.info("📡 Market broadcast loop started (interval=1s)")

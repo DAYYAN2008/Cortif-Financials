@@ -46,22 +46,24 @@ async def lifespan(application: FastAPI):
     news_task = asyncio.create_task(_news_sync_loop())
     logger.info("🚀 News sync background task started (interval=%ds)", NEWS_SYNC_INTERVAL)
     
-    market_data_task = asyncio.create_task(market_data_sync_loop())
-    logger.info("🚀 Market data sync background task started (interval=5s)")
+    # TODO: Partner API Hook
+    # market_data_task = asyncio.create_task(market_data_sync_loop())
+    # logger.info("🚀 Market data sync background task started (interval=5s)")
     
-    broadcast_task = asyncio.create_task(market_broadcast_loop())
-    logger.info("🚀 Market broadcast loop started (interval=1s)")
+    # broadcast_task = asyncio.create_task(market_broadcast_loop())
+    # logger.info("🚀 Market broadcast loop started (interval=1s)")
     
     yield
     
     news_task.cancel()
     logger.info("🛑 News sync background task stopped")
     
-    market_data_task.cancel()
-    logger.info("🛑 Market data sync background task stopped")
+    # TODO: Partner API Hook
+    # market_data_task.cancel()
+    # logger.info("🛑 Market data sync background task stopped")
     
-    broadcast_task.cancel()
-    logger.info("🛑 Market broadcast loop stopped")
+    # broadcast_task.cancel()
+    # logger.info("🛑 Market broadcast loop stopped")
     
     await redis_client.aclose()
     logger.info("🛑 Redis connection closed")
@@ -112,8 +114,10 @@ async def websocket_markets(websocket: WebSocket):
     try:
         # Keep connection alive — listen for client pings/messages
         while True:
+            # TODO: Partner API Hook
             # Wait for any message (ping/pong keepalive)
-            await websocket.receive_text()
+            # await websocket.receive_text()
+            await asyncio.sleep(1) # Silent idle loop to prevent loud disconnection errors
     except WebSocketDisconnect:
         manager.disconnect(websocket)
     except Exception:
