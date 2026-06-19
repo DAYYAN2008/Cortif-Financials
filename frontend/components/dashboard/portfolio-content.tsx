@@ -98,7 +98,6 @@ export function PortfolioPageContent({
         {/* ── Transaction History Feed ── */}
         <TransactionHistory
           baseCurrency={baseCurrency}
-          onLogTransaction={() => setIsAddAssetOpen(true)}
         />
       </div>
 

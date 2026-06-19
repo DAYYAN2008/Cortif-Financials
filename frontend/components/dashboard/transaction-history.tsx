@@ -1,14 +1,15 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   ArrowUpCircle,
   ArrowDownCircle,
-  Plus,
   Clock,
   Filter,
   Loader2,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/utils/currency";
@@ -29,6 +30,8 @@ interface Transaction {
   quantity: number;
   price: number;
   total: number;
+  fee: number | null;
+  notes: string | null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -46,7 +49,7 @@ function TransactionRow({
   const isBuy = tx.type === "BUY";
 
   return (
-    <motion.div
+    <motion.tr
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{
@@ -55,83 +58,106 @@ function TransactionRow({
         ease: [0.22, 1, 0.36, 1],
       }}
       className={cn(
-        "group flex items-center gap-4 px-5 py-4",
-        "border-b border-slate-100/80 dark:border-slate-800/40 last:border-b-0",
+        "group border-b border-slate-100/80 dark:border-slate-800/40 last:border-b-0",
         "transition-colors duration-200",
-        "hover:bg-slate-50/80 dark:hover:bg-slate-800/30"
+        "hover:bg-slate-50/80 dark:hover:bg-neutral-900/50"
       )}
     >
-      {/* Type Icon */}
-      <div
-        className={cn(
-          "flex items-center justify-center size-9 rounded-lg shrink-0",
-          isBuy
-            ? "bg-emerald-50 dark:bg-emerald-500/10"
-            : "bg-red-50 dark:bg-red-500/10"
-        )}
-      >
-        {isBuy ? (
-          <ArrowUpCircle className="size-[18px] text-emerald-600 dark:text-emerald-400" />
-        ) : (
-          <ArrowDownCircle className="size-[18px] text-red-600 dark:text-red-400" />
-        )}
-      </div>
-
-      {/* Asset + Type Label */}
-      <div className="flex flex-col min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <span className="text-[13px] font-semibold text-slate-900 dark:text-white truncate">
-            {tx.assetName}
-          </span>
-          <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500">•</span>
-          <span className="text-[12px] font-semibold text-slate-500 dark:text-slate-400 tracking-wide uppercase">
-            {tx.ticker}
-          </span>
-        </div>
-        <div className="flex items-center gap-2 mt-0.5">
-          <span
-            className={cn(
-              "inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider",
-              isBuy
-                ? "bg-emerald-500/10 dark:bg-emerald-400/10 text-emerald-600 dark:text-emerald-400"
-                : "bg-red-500/10 dark:bg-red-400/10 text-red-600 dark:text-red-400"
-            )}
-          >
-            {tx.type}
-          </span>
-          <span className="text-[11px] text-slate-400 dark:text-slate-500">
-            {tx.date}
-          </span>
-        </div>
-      </div>
-
-      {/* Quantity & Price */}
-      <div className="hidden sm:flex flex-col items-end shrink-0">
-        <span className="text-[12px] font-medium text-slate-600 dark:text-slate-300 font-mono tabular-nums">
-          {tx.ticker === "BTC" ? tx.quantity.toFixed(4) : tx.quantity.toLocaleString()}{" "}
-          <span className="text-slate-400 dark:text-slate-500">×</span>{" "}
-          {formatCurrency(tx.price, currency)}
-        </span>
-        <span className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
-          Qty × Price
-        </span>
-      </div>
-
-      {/* Total Volume */}
-      <div className="flex flex-col items-end shrink-0 min-w-[90px]">
-        <span className="text-[13px] font-semibold font-mono tabular-nums text-slate-900 dark:text-white">
-          {isBuy ? "−" : "+"}{formatCurrency(tx.total, currency)}
-        </span>
+      {/* 1. Type */}
+      <td className="px-5 py-4 whitespace-nowrap">
         <span
           className={cn(
-            "text-[10px] font-medium mt-0.5",
-            isBuy ? "text-emerald-500 dark:text-emerald-400/70" : "text-red-500 dark:text-red-400/70"
+            "inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-semibold uppercase tracking-wider",
+            isBuy
+              ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+              : "bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400"
           )}
         >
-          {isBuy ? "Invested" : "Received"}
+          {isBuy ? (
+            <ArrowUpCircle className="size-3.5" />
+          ) : (
+            <ArrowDownCircle className="size-3.5" />
+          )}
+          {tx.type}
         </span>
-      </div>
-    </motion.div>
+      </td>
+
+      {/* 2. Date */}
+      <td className="px-5 py-4 whitespace-nowrap">
+        <span className="text-[12px] text-slate-500 dark:text-slate-400">
+          {tx.date}
+        </span>
+      </td>
+
+      {/* 3. Assets */}
+      <td className="px-5 py-4 whitespace-nowrap">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center justify-center size-8 rounded-lg shrink-0 bg-slate-100 dark:bg-slate-800">
+            <span className="text-[10px] font-bold text-slate-600 dark:text-slate-400 tracking-wider">
+              {tx.ticker.slice(0, 3)}
+            </span>
+          </div>
+          <div className="flex flex-col min-w-0">
+            <span className="text-[13px] font-semibold text-slate-900 dark:text-white truncate">
+              {tx.assetName}
+            </span>
+            <span className="text-[11px] text-slate-400 dark:text-slate-500 uppercase tracking-wide">
+              {tx.ticker}
+            </span>
+          </div>
+        </div>
+      </td>
+
+      {/* 4. Price */}
+      <td className="px-5 py-4 whitespace-nowrap text-right">
+        <span className="text-[13px] font-medium text-slate-700 dark:text-slate-300 font-mono tabular-nums">
+          {formatCurrency(tx.price, currency)}
+        </span>
+      </td>
+
+      {/* 5. Amount */}
+      <td className="px-5 py-4 whitespace-nowrap text-right">
+        <div className="flex flex-col items-end gap-0.5">
+          <span
+            className={cn(
+              "text-[13px] font-semibold font-mono tabular-nums",
+              isBuy ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
+            )}
+          >
+            {isBuy ? "+" : "-"}{tx.ticker === "BTC" ? tx.quantity.toFixed(4) : tx.quantity.toLocaleString()} {tx.ticker}
+          </span>
+          <span className="text-[11px] text-slate-400 dark:text-slate-500 font-mono tabular-nums">
+            {formatCurrency(tx.total, currency)}
+          </span>
+        </div>
+      </td>
+
+      {/* 6. Fees */}
+      <td className="px-5 py-4 whitespace-nowrap text-right">
+        <span className="text-[12px] font-medium text-slate-600 dark:text-slate-400 font-mono tabular-nums">
+          {tx.fee ? formatCurrency(tx.fee, currency) : "--"}
+        </span>
+      </td>
+
+      {/* 7. Notes */}
+      <td className="px-5 py-4">
+        <span className="text-[12px] text-slate-500 dark:text-slate-400 max-w-[120px] truncate block">
+          {tx.notes && tx.notes.trim() !== "" ? tx.notes : "--"}
+        </span>
+      </td>
+
+      {/* 8. Actions */}
+      <td className="px-5 py-4 whitespace-nowrap text-right">
+        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+          <button className="flex items-center justify-center size-7 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:text-blue-400 dark:hover:bg-blue-500/10 transition-colors">
+            <Pencil className="size-3.5" />
+          </button>
+          <button className="flex items-center justify-center size-7 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-500/10 transition-colors">
+            <Trash2 className="size-3.5" />
+          </button>
+        </div>
+      </td>
+    </motion.tr>
   );
 }
 
@@ -140,10 +166,8 @@ function TransactionRow({
 /* ------------------------------------------------------------------ */
 export function TransactionHistory({
   baseCurrency,
-  onLogTransaction,
 }: {
   baseCurrency: string;
-  onLogTransaction: () => void;
 }) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -176,13 +200,16 @@ export function TransactionHistory({
       const formatted: Transaction[] = parsedRows.map((row: any) => {
         const qty = parseFloat(row.quantity) || 0;
         const prc = parseFloat(row.execution_price) || 0;
+        const fee = parseFloat(row.fee) || 0;
         
         // Format native Postgres date stamp safely
         const txDate = row.executed_at 
-          ? new Date(row.executed_at).toLocaleDateString("en-US", {
+          ? new Date(row.executed_at).toLocaleString("en-US", {
               month: "short",
               day: "numeric",
               year: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
             })
           : "Recent Date";
 
@@ -195,6 +222,8 @@ export function TransactionHistory({
           quantity: qty,
           price: prc,
           total: qty * prc,
+          fee: fee,
+          notes: row.notes || null,
         };
       });
 
@@ -247,30 +276,11 @@ export function TransactionHistory({
           <button className="flex items-center justify-center size-8 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:text-slate-500 dark:hover:text-slate-300 dark:hover:bg-slate-800 transition-colors cursor-pointer">
             <Filter className="size-3.5" />
           </button>
-
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.97 }}
-            onClick={onLogTransaction}
-            className={cn(
-              "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg",
-              "text-[12px] font-medium transition-all cursor-pointer",
-              "bg-emerald-600 text-white hover:bg-emerald-500",
-              "dark:bg-emerald-500 dark:hover:bg-emerald-400",
-              "shadow-sm shadow-emerald-600/20 dark:shadow-emerald-500/15"
-            )}
-          >
-            <Plus className="size-3.5" />
-            <span>Log Transaction</span>
-          </motion.button>
         </div>
       </div>
 
-      {/* Timeline / Feed */}
-      <div className="relative min-h-[80px]">
-        {/* Left timeline accent line */}
-        <div className="absolute left-[37px] top-4 bottom-4 w-px bg-gradient-to-b from-slate-200 via-slate-200/60 to-transparent dark:from-slate-700 dark:via-slate-700/40 hidden sm:block" />
-
+      {/* Tabular Data / Feed */}
+      <div className="overflow-x-auto min-h-[160px]">
         {isLoading ? (
           <div className="flex items-center justify-center py-10 w-full">
             <Loader2 className="size-5 animate-spin text-slate-400" />
@@ -280,14 +290,30 @@ export function TransactionHistory({
             No logged transaction history found.
           </div>
         ) : (
-          transactions.map((tx, i) => (
-            <TransactionRow
-              key={tx.id}
-              tx={tx}
-              currency={baseCurrency}
-              index={i}
-            />
-          ))
+          <table className="w-full min-w-[900px] text-left border-collapse">
+            <thead>
+              <tr className="border-b border-slate-100 dark:border-slate-800/40">
+                <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 whitespace-nowrap">Type</th>
+                <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 whitespace-nowrap">Date</th>
+                <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 whitespace-nowrap">Assets</th>
+                <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 whitespace-nowrap text-right">Price</th>
+                <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 whitespace-nowrap text-right">Amount / Value</th>
+                <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 whitespace-nowrap text-right">Fees</th>
+                <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 whitespace-nowrap">Notes</th>
+                <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 whitespace-nowrap text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {transactions.map((tx, i) => (
+                <TransactionRow
+                  key={tx.id}
+                  tx={tx}
+                  currency={baseCurrency}
+                  index={i}
+                />
+              ))}
+            </tbody>
+          </table>
         )}
       </div>
 
