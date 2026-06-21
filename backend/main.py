@@ -22,6 +22,7 @@ NEWS_SYNC_INTERVAL = 30 * 60  # 30 minutes
 
 async def _news_sync_loop() -> None:
     """Background loop: sync RSS feeds on startup, then every 30 minutes."""
+    await asyncio.sleep(5)  # Let Uvicorn finish startup and bind to port
     while True:
         logger.info("⏳ Running scheduled news sync …")
         try:

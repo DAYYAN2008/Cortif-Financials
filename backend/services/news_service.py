@@ -5,6 +5,7 @@ Parses RSS feeds from financial news sources and stores them in Supabase.
 
 import os
 import logging
+import requests
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -179,10 +180,9 @@ def sync_external_news() -> dict:
         for feed_url in feed_urls:
             logger.info("Fetching feed: %s (%s)", base_cat, feed_url)
             try:
-                feed = feedparser.parse(
-                    feed_url,
-                    request_headers=FEED_REQUEST_HEADERS,
-                )
+                response = requests.get(feed_url, headers=FEED_REQUEST_HEADERS, timeout=5)
+                response.raise_for_status()
+                feed = feedparser.parse(response.content)
 
                 if feed.bozo and not feed.entries:
                     err_msg = f"Feed error for {feed_url}: {feed.bozo_exception}"
