@@ -346,10 +346,11 @@ function MobileNav({ user, loading }: { user: User | null; loading: boolean }) {
           <MobileLink href="/dashboard/markets/commodities" label="Commodities" />
           <MobileLink href="/dashboard/markets/forex" label="Forex" />
 
-          {/* Academy */}
+          {/* General */}
           <span className="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">
             General
           </span>
+          <MobileLink href="/news" label="News" />
           <MobileLink label="Academy" />
         </nav>
 
@@ -553,6 +554,19 @@ export function Navbar() {
                   />
                 </div>
               </NavigationMenuContent>
+            </NavigationMenuItem>
+
+            {/* ── News (Plain Text) ── */}
+            <NavigationMenuItem>
+              <NavigationMenuLink
+                href="/news"
+                render={<Link href="/news" />}
+                className={`${navigationMenuTriggerStyle()} cursor-pointer`}
+              >
+                <span className="text-[13px] font-medium text-slate-700 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white">
+                  News
+                </span>
+              </NavigationMenuLink>
             </NavigationMenuItem>
 
             {/* ── Academy (Plain Text) ── */}
