@@ -15,6 +15,7 @@ import {
   DollarSign,
   Pencil,
   ChevronDown,
+  ChevronLeft,
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 
@@ -66,17 +67,207 @@ const BACKEND_URL =
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
-function formatDatetimeLabel(isoDate: string): string {
+function formatDatetimeLabel(d: Date): string {
   try {
-    const d = new Date(isoDate + "T00:00:00");
-    return d.toLocaleDateString("en-US", {
+    return d.toLocaleString("en-US", {
       month: "short",
       day: "numeric",
       year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
     });
   } catch {
-    return isoDate;
+    return "Invalid Date";
   }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Date & Time Picker Overlay                                         */
+/* ------------------------------------------------------------------ */
+function DateTimePickerOverlay({
+  selectedTimestamp,
+  onChange,
+  onClose,
+}: {
+  selectedTimestamp: Date;
+  onChange: (d: Date) => void;
+  onClose: () => void;
+}) {
+  const [tempTimestamp, setTempTimestamp] = useState(new Date(selectedTimestamp));
+  const [viewDate, setViewDate] = useState(new Date(selectedTimestamp));
+  
+  // Time state
+  const [timeStr, setTimeStr] = useState(() => {
+    return tempTimestamp.toTimeString().slice(0, 5); // "HH:MM"
+  });
+
+  const now = new Date();
+
+  // Calendar logic
+  const year = viewDate.getFullYear();
+  const month = viewDate.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstDay = new Date(year, month, 1).getDay();
+
+  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+  const blanks = Array.from({ length: firstDay }, (_, i) => i);
+
+  const isSelected = (day: number) => {
+    return (
+      tempTimestamp.getFullYear() === year &&
+      tempTimestamp.getMonth() === month &&
+      tempTimestamp.getDate() === day
+    );
+  };
+
+  const isFuture = (day: number) => {
+    // A day is entirely in the future if the START of that day is > now
+    const startOfDay = new Date(year, month, day, 0, 0, 0);
+    return startOfDay > now;
+  };
+
+  const handleDayClick = (day: number) => {
+    if (isFuture(day)) return;
+    const [hours, minutes] = timeStr.split(":").map(Number);
+    
+    const newDate = new Date(year, month, day, hours, minutes);
+    if (newDate > now) {
+      setTempTimestamp(now);
+      setTimeStr(now.toTimeString().slice(0, 5));
+    } else {
+      setTempTimestamp(newDate);
+    }
+  };
+
+  const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setTimeStr(val);
+    const [hours, minutes] = val.split(":").map(Number);
+    const newDate = new Date(tempTimestamp);
+    newDate.setHours(hours, minutes);
+    if (newDate > now) {
+      setTempTimestamp(now);
+      setTimeStr(now.toTimeString().slice(0, 5));
+    } else {
+      setTempTimestamp(newDate);
+    }
+  };
+
+  const nextMonth = () => {
+    const next = new Date(year, month + 1, 1);
+    if (next.getFullYear() > now.getFullYear() || (next.getFullYear() === now.getFullYear() && next.getMonth() > now.getMonth())) {
+      return;
+    }
+    setViewDate(next);
+  };
+
+  const prevMonth = () => setViewDate(new Date(year, month - 1, 1));
+
+  const handleConfirm = () => {
+    onChange(tempTimestamp);
+    onClose();
+  };
+
+  return (
+    <div className="absolute inset-0 z-20 flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center gap-3 px-5 py-3.5 border-b border-slate-100 dark:border-slate-800/60">
+        <button
+          onClick={onClose}
+          className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-full transition-colors"
+          type="button"
+        >
+          <ArrowLeft className="size-4" />
+        </button>
+        <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex-1">
+          Date & Time
+        </h3>
+      </div>
+
+      <div className="p-5 flex-1 overflow-y-auto scrollbar-thin">
+        {/* Month Navigation */}
+        <div className="flex items-center justify-between mb-4">
+          <button
+            type="button"
+            onClick={prevMonth}
+            className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+          >
+            <ChevronLeft className="size-4" />
+          </button>
+          <span className="text-sm font-semibold text-slate-900 dark:text-white">
+            {viewDate.toLocaleString("en-US", { month: "long", year: "numeric" })}
+          </span>
+          <button
+            type="button"
+            onClick={nextMonth}
+            disabled={viewDate.getFullYear() === now.getFullYear() && viewDate.getMonth() === now.getMonth()}
+            className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <ChevronRight className="size-4" />
+          </button>
+        </div>
+
+        {/* Days Header */}
+        <div className="grid grid-cols-7 gap-1 mb-2">
+          {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((d) => (
+            <div key={d} className="text-center text-[10px] font-semibold text-slate-400 uppercase tracking-wider py-1">
+              {d}
+            </div>
+          ))}
+        </div>
+
+        {/* Calendar Grid */}
+        <div className="grid grid-cols-7 gap-1 mb-6">
+          {blanks.map((b) => (
+            <div key={`blank-${b}`} className="aspect-square" />
+          ))}
+          {days.map((day) => {
+            const selected = isSelected(day);
+            const disabled = isFuture(day);
+            return (
+              <button
+                type="button"
+                key={day}
+                onClick={() => handleDayClick(day)}
+                disabled={disabled}
+                className={`aspect-square flex items-center justify-center rounded-lg text-sm transition-all
+                  ${disabled ? "pointer-events-none opacity-20 text-slate-400" : ""}
+                  ${!disabled && !selected ? "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800" : ""}
+                  ${selected ? "bg-blue-600 dark:bg-indigo-600 text-white font-semibold shadow-sm" : ""}
+                `}
+              >
+                {day}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Time Selector */}
+        <div className="space-y-2">
+          <label className="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+            Time
+          </label>
+          <input
+            type="time"
+            value={timeStr}
+            onChange={handleTimeChange}
+            className="w-full rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50 dark:bg-slate-800/60 px-3.5 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+          />
+        </div>
+      </div>
+
+      {/* Confirmation CTA */}
+      <div className="px-5 py-4 border-t border-slate-100 dark:border-slate-800/60 bg-slate-50/50 dark:bg-slate-950/50">
+        <button
+          type="button"
+          onClick={handleConfirm}
+          className="w-full py-3 text-sm font-semibold rounded-xl flex items-center justify-center transition-all duration-200 bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 active:scale-[0.98]"
+        >
+          Change Date & Time
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function formatCurrency(value: number): string {
@@ -260,7 +451,8 @@ function TransactionStep({
   const [type, setType] = useState<TransactionType>("buy");
   const [quantity, setQuantity] = useState("");
   const [price, setPrice] = useState(selectedAsset.fallback_price.toString());
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState<boolean>(false);
+  const [selectedTimestamp, setSelectedTimestamp] = useState<Date>(new Date());
 
   /* Toggleable metadata panels */
   const [showFee, setShowFee] = useState(false);
@@ -274,8 +466,7 @@ function TransactionStep({
 
   const isFormValid =
     parseFloat(quantity) > 0 &&
-    parseFloat(price) > 0 &&
-    date.length > 0;
+    parseFloat(price) > 0;
 
   const subtotal = useMemo(() => {
     const q = parseFloat(quantity) || 0;
@@ -310,7 +501,7 @@ function TransactionStep({
         transaction_type: type.toUpperCase(),
         quantity: parseFloat(quantity),
         execution_price: parseFloat(price),
-        executed_at: new Date(date).toISOString(),
+        executed_at: selectedTimestamp.toISOString(),
       };
 
       if (fee.trim()) payload.fee = parseFloat(fee);
@@ -367,7 +558,7 @@ function TransactionStep({
   };
 
   return (
-    <>
+    <div className="relative">
       {/* ── Selected Asset Header Bar ── */}
       <div className="flex items-center gap-3 px-5 py-3.5 border-b border-slate-100 dark:border-slate-800/60">
         <button
@@ -466,24 +657,15 @@ function TransactionStep({
         <div className="flex items-center gap-2">
           {/* Timestamp Picker */}
           <div className="relative flex-1">
-            <input
-              ref={dateInputRef}
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              disabled={isSubmitting}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-              aria-label="Pick transaction date"
-            />
             <button
               type="button"
-              onClick={() => dateInputRef.current?.showPicker?.()}
+              onClick={() => setIsDatePickerOpen(true)}
               disabled={isSubmitting}
               className="w-full flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50 dark:bg-slate-800/60 text-left transition-all hover:border-slate-300 dark:hover:border-slate-600 group"
             >
               <Calendar className="size-3.5 text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-300 shrink-0 transition-colors" />
               <span className="text-xs font-medium text-slate-600 dark:text-slate-300 truncate">
-                {formatDatetimeLabel(date)}
+                {formatDatetimeLabel(selectedTimestamp)}
               </span>
             </button>
           </div>
@@ -687,7 +869,25 @@ function TransactionStep({
           )}
         </button>
       </div>
-    </>
+
+      <AnimatePresence>
+        {isDatePickerOpen && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            transition={{ duration: 0.2 }}
+            className="absolute inset-0 z-30 bg-white dark:bg-slate-900 overflow-hidden rounded-2xl"
+          >
+            <DateTimePickerOverlay
+              selectedTimestamp={selectedTimestamp}
+              onChange={setSelectedTimestamp}
+              onClose={() => setIsDatePickerOpen(false)}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
 
