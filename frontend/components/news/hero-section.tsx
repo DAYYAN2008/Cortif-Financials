@@ -138,19 +138,8 @@ export function HeroSection({ featured, bulletins }: HeroSectionProps) {
           className="lg:col-span-1 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 bg-white/70 dark:bg-slate-900/60 backdrop-blur-xl overflow-hidden"
           id="news-hero-bulletins"
         >
-          {/* Panel header */}
-          <div className="flex items-center gap-2 px-5 pt-5 pb-3">
-            <span className="relative flex size-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-              <span className="relative inline-flex rounded-full size-2 bg-red-500" />
-            </span>
-            <h3 className="text-[13px] font-bold uppercase tracking-widest text-slate-600 dark:text-slate-300">
-              Real-Time Bulletins
-            </h3>
-          </div>
-
           {/* Bulletin items */}
-          <div className="flex flex-col px-5 pb-4">
+          <div className="flex flex-col px-5 py-4">
             {bulletins.length === 0 ? (
               <p className="text-[13px] text-slate-400 dark:text-slate-500 py-4">
                 No bulletins available.
