@@ -178,23 +178,16 @@ export function TransactionHistory({
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) return;
 
-      const headers = { Authorization: `Bearer ${session.access_token}` };
+      const res = await fetch(`${BACKEND_URL}/api/v1/portfolio/transactions`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
 
-      // Query raw logging table entries
-      const res = await fetch(`${BACKEND_URL}/api/transactions`, { headers });
-      
-      let rawData = [];
-      if (res.ok) {
-        rawData = await res.json();
-      } else {
-        // Fallback validation mapping path variant if needed
-        const altRes = await fetch(`${BACKEND_URL}/api/v1/portfolio/transactions`, { headers });
-        if (altRes.ok) {
-          rawData = await altRes.json();
-        }
+      if (!res.ok) {
+        console.error(`Transaction history fetch failed (${res.status})`);
+        return;
       }
 
-      // Handle raw array mapping configurations safely
+      const rawData = await res.json();
       const parsedRows = Array.isArray(rawData) ? rawData : rawData?.transactions ?? [];
 
       const formatted: Transaction[] = parsedRows.map((row: any) => {
@@ -202,7 +195,6 @@ export function TransactionHistory({
         const prc = parseFloat(row.execution_price) || 0;
         const fee = parseFloat(row.fee) || 0;
         
-        // Format native Postgres date stamp safely
         const txDate = row.executed_at 
           ? new Date(row.executed_at).toLocaleString("en-US", {
               month: "short",
@@ -229,7 +221,7 @@ export function TransactionHistory({
 
       setTransactions(formatted);
     } catch (err) {
-      console.error("Failed to sync structural ledger data:", err);
+      console.error("Failed to sync transaction history:", err);
     } finally {
       setIsLoading(false);
     }

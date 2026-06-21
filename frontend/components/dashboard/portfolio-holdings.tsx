@@ -312,27 +312,19 @@ export function PortfolioHoldings({ baseCurrency }: { baseCurrency: string }) {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) return;
 
-      const headers = { Authorization: `Bearer ${session.access_token}` };
-      
-      // Step A: Fetch base portfolio definitions 
-      const portfolioRes = await fetch(`${BACKEND_URL}/api/portfolio`, { headers });
-      if (!portfolioRes.ok) throw new Error("Could not download system portfolio specs.");
-      const portfolio = await portfolioRes.json();
+      const res = await fetch(`${BACKEND_URL}/api/v1/portfolio/holdings`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
 
-      // Step B: Query view rows populated by public.portfolio_holdings_summary
-      const holdingsRes = await fetch(`${BACKEND_URL}/api/portfolio/holdings`, { headers });
-      if (!holdingsRes.ok) {
-        // Fallback fallback mechanism if routes use alternate paths
-        const altRes = await fetch(`${BACKEND_URL}/api/v1/portfolio/holdings`, { headers });
-        if (!altRes.ok) throw new Error("Calculated view data streaming failure.");
-        const data = await altRes.json();
-        renderHoldingsRows(data?.holdings ?? data ?? []);
-        return;
+      if (!res.ok) {
+        throw new Error(`Holdings fetch failed (${res.status})`);
       }
 
-      const data = await holdingsRes.json();
-      renderHoldingsRows(data?.holdings ?? data ?? []);
+      const data = await res.json();
+      const rows = Array.isArray(data) ? data : data?.holdings ?? [];
+      renderHoldingsRows(rows);
     } catch (err: any) {
+      console.error("Holdings hydration error:", err);
       setError(err.message || "Data hydration failed.");
     } finally {
       setIsLoading(false);

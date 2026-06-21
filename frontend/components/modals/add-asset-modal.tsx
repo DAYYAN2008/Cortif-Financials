@@ -1,123 +1,291 @@
 "use client";
 
-import { useEffect, useState, Suspense, useCallback } from "react";
+import { useEffect, useState, Suspense, useCallback, useMemo, useRef } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
+import {
+  X,
+  Loader2,
+  AlertCircle,
+  CheckCircle2,
+  Search,
+  ChevronRight,
+  ArrowLeft,
+  Calendar,
+  DollarSign,
+  Pencil,
+  ChevronDown,
+} from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 
+/* ------------------------------------------------------------------ */
+/*  Types                                                              */
+/* ------------------------------------------------------------------ */
 type TransactionType = "buy" | "sell";
-type AssetType = "stock" | "crypto" | "commodity";
+type AssetType = "Stock" | "Crypto" | "Commodity";
+type ModalStep = "search" | "transaction";
+type FilterCategory = "All" | AssetType;
 
-const ASSET_TYPES: { value: AssetType; label: string; icon: string }[] = [
-  { value: "stock", label: "Stock", icon: "📈" },
-  { value: "crypto", label: "Crypto", icon: "₿" },
-  { value: "commodity", label: "Commodity", icon: "🪙" },
+interface SearchableAsset {
+  id: string;
+  name: string;
+  symbol: string;
+  asset_type: AssetType;
+  logo_url?: string;
+  fallback_price: number;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Development Mock Data                                              */
+/* ------------------------------------------------------------------ */
+const DEVELOPMENT_MOCK_ASSETS: SearchableAsset[] = [
+  { id: "sol", name: "Solana", symbol: "SOL", asset_type: "Crypto", fallback_price: 20474.96 },
+  { id: "btc", name: "Bitcoin", symbol: "BTC", asset_type: "Crypto", fallback_price: 18000000 },
+  { id: "eth", name: "Ethereum", symbol: "ETH", asset_type: "Crypto", fallback_price: 450000 },
+  { id: "aapl", name: "Apple Inc.", symbol: "AAPL", asset_type: "Stock", fallback_price: 48000 },
+  { id: "nvda", name: "NVIDIA Corp.", symbol: "NVDA", asset_type: "Stock", fallback_price: 135000 },
+  { id: "tsla", name: "Tesla Inc.", symbol: "TSLA", asset_type: "Stock", fallback_price: 27500 },
+  { id: "msft", name: "Microsoft Corp.", symbol: "MSFT", asset_type: "Stock", fallback_price: 42000 },
+  { id: "gold", name: "Gold Trust", symbol: "GLD", asset_type: "Commodity", fallback_price: 65000 },
+  { id: "silver", name: "Silver Trust", symbol: "SLV", asset_type: "Commodity", fallback_price: 2800 },
+  { id: "oil", name: "Crude Oil Fund", symbol: "USO", asset_type: "Commodity", fallback_price: 7500 },
 ];
 
-// Local backup catalog to ensure search dropdown works instantly if the backend endpoint is offline
-const LOCAL_ASSET_CATALOG = [
-  { ticker: "BTC", name: "Bitcoin", asset_type: "crypto" },
-  { ticker: "ETH", name: "Ethereum", asset_type: "crypto" },
-  { ticker: "LUCK", name: "Lucky Cement", asset_type: "stock" },
-  { ticker: "AAPL", name: "Apple Inc.", asset_type: "stock" },
-  { ticker: "NVDA", name: "NVIDIA Corp.", asset_type: "stock" },
-  { ticker: "TSLA", name: "Tesla Inc.", asset_type: "stock" },
-  { ticker: "GOLD", name: "Gold (XAU)", asset_type: "commodity" },
-];
+const FILTER_CATEGORIES: FilterCategory[] = ["All", "Stock", "Crypto", "Commodity"];
+
+const FILTER_LABELS: Record<FilterCategory, string> = {
+  All: "All",
+  Stock: "Stocks",
+  Crypto: "Crypto",
+  Commodity: "Commodities",
+};
 
 const BACKEND_URL =
   process.env.NEXT_PUBLIC_BACKEND_URL ?? "https://dayyanyasir-cortif-backend.hf.space";
 
+/* ------------------------------------------------------------------ */
+/*  Helpers                                                            */
+/* ------------------------------------------------------------------ */
+function formatDatetimeLabel(isoDate: string): string {
+  try {
+    const d = new Date(isoDate + "T00:00:00");
+    return d.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  } catch {
+    return isoDate;
+  }
+}
+
+function formatCurrency(value: number): string {
+  return new Intl.NumberFormat("en-PK", {
+    style: "currency",
+    currency: "PKR",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Logo Fallback Component                                            */
+/* ------------------------------------------------------------------ */
+function AssetLogo({ asset, size = "md" }: { asset: SearchableAsset; size?: "sm" | "md" }) {
+  const gradients: Record<AssetType, string> = {
+    Crypto: "from-violet-500 to-indigo-600",
+    Stock: "from-emerald-500 to-teal-600",
+    Commodity: "from-amber-500 to-orange-600",
+  };
+
+  const sizeClass = size === "sm" ? "size-8" : "size-10";
+  const textSize = size === "sm" ? "text-[9px]" : "text-[11px]";
+
+  return (
+    <div
+      className={`flex items-center justify-center ${sizeClass} rounded-full bg-gradient-to-br ${gradients[asset.asset_type]} shrink-0 shadow-sm`}
+    >
+      <span className={`${textSize} font-bold text-white tracking-wide leading-none`}>
+        {asset.symbol.slice(0, 3)}
+      </span>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Step 1: Asset Search View                                          */
+/* ------------------------------------------------------------------ */
+function AssetSearchStep({
+  onSelect,
+  onClose,
+}: {
+  onSelect: (asset: SearchableAsset) => void;
+  onClose: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [activeFilter, setActiveFilter] = useState<FilterCategory>("All");
+
+  const filteredAssets = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    return DEVELOPMENT_MOCK_ASSETS.filter((asset) => {
+      const matchesFilter = activeFilter === "All" || asset.asset_type === activeFilter;
+      const matchesQuery =
+        !term ||
+        asset.name.toLowerCase().includes(term) ||
+        asset.symbol.toLowerCase().includes(term);
+      return matchesFilter && matchesQuery;
+    });
+  }, [query, activeFilter]);
+
+  return (
+    <>
+      {/* Header */}
+      <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800/60">
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
+          Select Asset
+        </h2>
+        <button
+          onClick={onClose}
+          className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-full transition-colors"
+          aria-label="Close modal"
+        >
+          <X className="size-4" />
+        </button>
+      </div>
+
+      {/* Search Input */}
+      <div className="px-6 pt-5 pb-3">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-400 pointer-events-none" />
+          <input
+            type="text"
+            placeholder="Search assets..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            autoFocus
+            className="w-full rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50 dark:bg-slate-800/60 pl-10 pr-4 py-2.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-900/20 dark:focus:ring-white/20 focus:border-slate-400 dark:focus:border-slate-600 transition-all"
+          />
+        </div>
+      </div>
+
+      {/* Category Filter Bar */}
+      <div className="px-6 pb-3">
+        <div className="flex p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl gap-0.5">
+          {FILTER_CATEGORIES.map((cat) => (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => setActiveFilter(cat)}
+              className={`flex-1 rounded-lg py-1.5 text-xs font-medium transition-all duration-200 ${
+                activeFilter === cat
+                  ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
+                  : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300"
+              }`}
+            >
+              {FILTER_LABELS[cat]}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Results List */}
+      <div className="px-3 pb-4 max-h-[42vh] overflow-y-auto scrollbar-thin">
+        {filteredAssets.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <div className="size-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3">
+              <Search className="size-5 text-slate-400" />
+            </div>
+            <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
+              No assets found
+            </p>
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+              Try adjusting your search or filter
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-0.5">
+            {filteredAssets.map((asset, idx) => (
+              <motion.button
+                key={asset.id}
+                type="button"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: idx * 0.03, duration: 0.2 }}
+                onClick={() => onSelect(asset)}
+                className="w-full flex items-center gap-3.5 px-3 py-3 rounded-xl text-left transition-all duration-150 hover:bg-slate-50 dark:hover:bg-slate-800/60 group"
+              >
+                <AssetLogo asset={asset} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-slate-900 dark:text-white truncate">
+                      {asset.name}
+                    </span>
+                    <span className="text-[11px] font-semibold tracking-wider text-slate-400 dark:text-slate-500 uppercase shrink-0">
+                      {asset.symbol}
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 block">
+                    {asset.asset_type}
+                  </span>
+                </div>
+                <ChevronRight className="size-4 text-slate-300 dark:text-slate-600 group-hover:text-slate-500 dark:group-hover:text-slate-400 transition-colors shrink-0" />
+              </motion.button>
+            ))}
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Step 2: Contextual Transaction Entry Form                          */
+/* ------------------------------------------------------------------ */
 const inputClass =
-  "w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-white transition-all";
+  "w-full rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50 dark:bg-slate-800/60 px-3.5 py-2.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-900/20 dark:focus:ring-white/20 focus:border-slate-400 dark:focus:border-slate-600 transition-all";
 
-function AddAssetModalContent() {
+function TransactionStep({
+  selectedAsset,
+  onBack,
+  onClose,
+}: {
+  selectedAsset: SearchableAsset;
+  onBack: () => void;
+  onClose: () => void;
+}) {
   const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const isOpen = searchParams.get("modal") === "add-asset";
+  const supabase = createClient();
+  const dateInputRef = useRef<HTMLInputElement>(null);
 
-  /* ---- Form State ---- */
-  const [ticker, setTicker] = useState("");
-  const [assetName, setAssetName] = useState("");
-  const [assetType, setAssetType] = useState<AssetType>("stock");
-  const [assetSuggestions, setAssetSuggestions] = useState<any[]>([]);
-  const [showDropdown, setShowDropdown] = useState(false);
   const [type, setType] = useState<TransactionType>("buy");
   const [quantity, setQuantity] = useState("");
-  const [price, setPrice] = useState("");
-  const [date, setDate] = useState("");
+  const [price, setPrice] = useState(selectedAsset.fallback_price.toString());
+  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
 
-  /* ---- Request Lifecycle ---- */
+  /* Toggleable metadata panels */
+  const [showFee, setShowFee] = useState(false);
+  const [showNotes, setShowNotes] = useState(false);
+  const [fee, setFee] = useState("");
+  const [notes, setNotes] = useState("");
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
   const [successId, setSuccessId] = useState<string | null>(null);
-  const supabase = createClient();
-
-  useEffect(() => {
-    setDate(new Date().toISOString().split("T")[0]);
-  }, []);
-
-  const closeModal = useCallback(() => {
-    const params = new URLSearchParams(searchParams.toString());
-    params.delete("modal");
-    router.push(`${pathname}?${params.toString()}`);
-  }, [pathname, router, searchParams]);
-
-  useEffect(() => {
-    if (isOpen) {
-      setTicker("");
-      setAssetName("");
-      setAssetType("stock");
-      setType("buy");
-      setQuantity("");
-      setPrice("");
-      setDate(new Date().toISOString().split("T")[0]);
-      setError(null);
-      setIsSubmitting(false);
-    }
-  }, [isOpen]);
-
-  /* ---- Fetch asset suggestions (With Smart Local Fallback) ---- */
-  useEffect(() => {
-    const term = ticker.trim().toUpperCase();
-    if (!term) {
-      setAssetSuggestions([]);
-      return;
-    }
-
-    const id = setTimeout(async () => {
-      try {
-        const res = await fetch(`${BACKEND_URL}/api/v1/assets?search=${encodeURIComponent(term)}`);
-        if (res.ok) {
-          const body = await res.json().catch(() => null);
-          setAssetSuggestions(body?.assets ?? []);
-          setShowDropdown(true);
-          return;
-        }
-      } catch (err) {
-        console.warn("Backend search endpoint unavailable, using local asset catalog fallback.");
-      }
-
-      // Local Match Fallback Loop
-      const matches = LOCAL_ASSET_CATALOG.filter(
-        (a) => a.ticker.includes(term) || a.name.toUpperCase().includes(term)
-      );
-      setAssetSuggestions(matches);
-      setShowDropdown(true);
-    }, 250);
-
-    return () => clearTimeout(id);
-  }, [ticker]);
 
   const isFormValid =
-    ticker.trim().length > 0 &&
-    assetName.trim().length > 0 &&
     parseFloat(quantity) > 0 &&
     parseFloat(price) > 0 &&
     date.length > 0;
+
+  const subtotal = useMemo(() => {
+    const q = parseFloat(quantity) || 0;
+    const p = parseFloat(price) || 0;
+    return q * p;
+  }, [quantity, price]);
+
+  const feeValue = useMemo(() => parseFloat(fee) || 0, [fee]);
+
+  const totalValue = useMemo(() => subtotal + feeValue, [subtotal, feeValue]);
 
   const handleSubmit = async () => {
     if (!isFormValid || isSubmitting) return;
@@ -126,25 +294,28 @@ function AddAssetModalContent() {
     setIsSubmitting(true);
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session?.access_token) {
         setError("You must be logged in to add a transaction.");
         setIsSubmitting(false);
         return;
       }
 
-      // CRITICAL: We completely omit the portfolio_id key so the backend uses its default resolution fallback
-      const payload = {
-        ticker: ticker.trim().toUpperCase(),
-        asset_name: assetName.trim(),
-        asset_type: assetType.toLowerCase(),
+      const payload: Record<string, unknown> = {
+        ticker: selectedAsset.symbol.toUpperCase(),
+        asset_name: selectedAsset.name,
+        asset_type: selectedAsset.asset_type.toLowerCase(),
         transaction_type: type.toUpperCase(),
         quantity: parseFloat(quantity),
         execution_price: parseFloat(price),
         executed_at: new Date(date).toISOString(),
       };
 
-      // Targeted execution strictly against your verified Swagger endpoint mapping
+      if (fee.trim()) payload.fee = parseFloat(fee);
+      if (notes.trim()) payload.notes = notes.trim();
+
       const res = await fetch(`${BACKEND_URL}/api/v1/portfolio/transactions`, {
         method: "POST",
         headers: {
@@ -156,185 +327,457 @@ function AddAssetModalContent() {
 
       if (!res.ok) {
         const body = await res.json().catch(() => null);
-        // If it's a validation error, extract the message arrays cleanly
-        const detailMessage = typeof body?.detail === "object" 
-          ? JSON.stringify(body.detail) 
-          : body?.detail;
-          
-        setError(detailMessage ?? `Server rejected transaction log entry (Status ${res.status})`);
+        const detailMessage =
+          typeof body?.detail === "object"
+            ? JSON.stringify(body.detail)
+            : body?.detail;
+        setError(
+          detailMessage ??
+            `Server rejected transaction log entry (Status ${res.status})`
+        );
         setIsSubmitting(false);
         return;
       }
 
-      // Read the pre-generated UUID from the backend response
       const responseBody = await res.json().catch(() => null);
       const transactionId = responseBody?.id ?? null;
 
-      // Optimistic: immediately dispatch portfolio refresh and close modal
-      // The backend has already validated and queued the insert in background
-      window.dispatchEvent(new CustomEvent("portfolio-updated"));
-      
-      setTicker("");
-      setAssetName("");
-      setShowDropdown(false);
       setIsSubmitting(false);
-      
-      // Brief success flash before closing
       setSuccessId(transactionId);
+
+      setQuantity("");
+      setFee("");
+      setNotes("");
+      setShowFee(false);
+      setShowNotes(false);
+
+      window.dispatchEvent(new CustomEvent("portfolio-updated"));
+
       setTimeout(() => {
         setSuccessId(null);
         router.refresh();
-        closeModal();
+        onClose();
       }, 800);
     } catch (err: any) {
-      setError(err.message || "An unexpected network execution connection failure occurred.");
+      setError(
+        err.message || "An unexpected network execution connection failure occurred."
+      );
       setIsSubmitting(false);
     }
   };
+
+  return (
+    <>
+      {/* ── Selected Asset Header Bar ── */}
+      <div className="flex items-center gap-3 px-5 py-3.5 border-b border-slate-100 dark:border-slate-800/60">
+        <button
+          onClick={onBack}
+          disabled={isSubmitting}
+          className="p-1.5 -ml-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
+          aria-label="Go back to search"
+        >
+          <ArrowLeft className="size-4" />
+        </button>
+        <div className="flex items-center gap-2.5 flex-1 min-w-0 px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50">
+          <AssetLogo asset={selectedAsset} size="sm" />
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="text-[13px] font-semibold text-slate-900 dark:text-white truncate">
+              {selectedAsset.name}
+            </span>
+            <span className="text-[10px] font-bold tracking-widest text-slate-400 dark:text-slate-500 uppercase shrink-0">
+              {selectedAsset.symbol}
+            </span>
+          </div>
+          <ChevronDown className="size-3.5 text-slate-400 dark:text-slate-500 ml-auto shrink-0" />
+        </div>
+        <button
+          onClick={onClose}
+          disabled={isSubmitting}
+          className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-full transition-colors"
+          aria-label="Close modal"
+        >
+          <X className="size-4" />
+        </button>
+      </div>
+
+      {/* ── Form Body ── */}
+      <div className="px-5 py-4 space-y-4 max-h-[58vh] overflow-y-auto">
+        {/* Transaction Direction Toggle */}
+        <div className="flex p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl">
+          <button
+            type="button"
+            onClick={() => setType("buy")}
+            disabled={isSubmitting}
+            className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-all duration-200 ${
+              type === "buy"
+                ? "bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-sm"
+                : "text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
+            }`}
+          >
+            Buy
+          </button>
+          <button
+            type="button"
+            onClick={() => setType("sell")}
+            disabled={isSubmitting}
+            className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-all duration-200 ${
+              type === "sell"
+                ? "bg-white dark:bg-slate-900 text-red-500 dark:text-red-400 shadow-sm"
+                : "text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
+            }`}
+          >
+            Sell
+          </button>
+        </div>
+
+        {/* Numeric Inputs: Quantity & Price Per Unit */}
+        <div className="flex gap-3">
+          <div className="space-y-1.5 flex-1">
+            <label className="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+              Quantity
+            </label>
+            <input
+              type="number"
+              step="any"
+              placeholder="0.00"
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value)}
+              disabled={isSubmitting}
+              className={inputClass}
+            />
+          </div>
+          <div className="space-y-1.5 flex-1">
+            <label className="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+              Price / Unit
+            </label>
+            <input
+              type="number"
+              step="any"
+              placeholder="0.00"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              disabled={isSubmitting}
+              className={inputClass}
+            />
+          </div>
+        </div>
+
+        {/* ── Metadata Action Buttons Row ── */}
+        <div className="flex items-center gap-2">
+          {/* Timestamp Picker */}
+          <div className="relative flex-1">
+            <input
+              ref={dateInputRef}
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              disabled={isSubmitting}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+              aria-label="Pick transaction date"
+            />
+            <button
+              type="button"
+              onClick={() => dateInputRef.current?.showPicker?.()}
+              disabled={isSubmitting}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50 dark:bg-slate-800/60 text-left transition-all hover:border-slate-300 dark:hover:border-slate-600 group"
+            >
+              <Calendar className="size-3.5 text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-300 shrink-0 transition-colors" />
+              <span className="text-xs font-medium text-slate-600 dark:text-slate-300 truncate">
+                {formatDatetimeLabel(date)}
+              </span>
+            </button>
+          </div>
+
+          {/* Fee Toggle */}
+          <button
+            type="button"
+            onClick={() => setShowFee(!showFee)}
+            disabled={isSubmitting}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border transition-all ${
+              showFee
+                ? "border-slate-900/20 dark:border-white/20 bg-slate-900/5 dark:bg-white/5 text-slate-900 dark:text-white"
+                : "border-slate-200 dark:border-slate-700/80 bg-slate-50 dark:bg-slate-800/60 text-slate-400 dark:text-slate-500 hover:border-slate-300 dark:hover:border-slate-600 hover:text-slate-600 dark:hover:text-slate-300"
+            }`}
+            title="Add fee"
+          >
+            <DollarSign className="size-3.5 shrink-0" />
+            <span className="text-xs font-medium">Fee</span>
+          </button>
+
+          {/* Notes Toggle */}
+          <button
+            type="button"
+            onClick={() => setShowNotes(!showNotes)}
+            disabled={isSubmitting}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border transition-all ${
+              showNotes
+                ? "border-slate-900/20 dark:border-white/20 bg-slate-900/5 dark:bg-white/5 text-slate-900 dark:text-white"
+                : "border-slate-200 dark:border-slate-700/80 bg-slate-50 dark:bg-slate-800/60 text-slate-400 dark:text-slate-500 hover:border-slate-300 dark:hover:border-slate-600 hover:text-slate-600 dark:hover:text-slate-300"
+            }`}
+            title="Add notes"
+          >
+            <Pencil className="size-3.5 shrink-0" />
+            <span className="text-xs font-medium">Note</span>
+          </button>
+        </div>
+
+        {/* ── Expandable Fee Input ── */}
+        <AnimatePresence>
+          {showFee && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.15 }}
+              className="overflow-hidden"
+            >
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                  Transaction Fee
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 dark:text-slate-500 font-medium pointer-events-none">
+                    Rs.
+                  </span>
+                  <input
+                    type="number"
+                    step="any"
+                    placeholder="0.00"
+                    value={fee}
+                    onChange={(e) => setFee(e.target.value)}
+                    disabled={isSubmitting}
+                    autoFocus
+                    className={`${inputClass} pl-10`}
+                  />
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* ── Expandable Notes Input ── */}
+        <AnimatePresence>
+          {showNotes && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.15 }}
+              className="overflow-hidden"
+            >
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                  Notes
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Add a note about this transaction..."
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  disabled={isSubmitting}
+                  autoFocus
+                  className={`${inputClass} resize-none`}
+                />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* ── Aggregate Value Summary Panel ── */}
+        <AnimatePresence>
+          {parseFloat(quantity) > 0 && parseFloat(price) > 0 && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden"
+            >
+              <div className="rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-700/50 px-4 py-3 space-y-2">
+                {/* Breakdown rows */}
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] text-slate-400 dark:text-slate-500">
+                    {parseFloat(quantity).toLocaleString("en-US", { maximumFractionDigits: 8 })} × {formatCurrency(parseFloat(price) || 0)}
+                  </span>
+                  <span className="text-xs font-medium text-slate-600 dark:text-slate-300 tabular-nums">
+                    {formatCurrency(subtotal)}
+                  </span>
+                </div>
+                {feeValue > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-slate-400 dark:text-slate-500">
+                      Fee
+                    </span>
+                    <span className="text-xs font-medium text-slate-600 dark:text-slate-300 tabular-nums">
+                      + {formatCurrency(feeValue)}
+                    </span>
+                  </div>
+                )}
+                {/* Divider */}
+                <div className="border-t border-slate-200/80 dark:border-slate-700/50" />
+                {/* Total */}
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                    {type === "buy" ? "Total Spent" : "Total Received"}
+                  </span>
+                  <span className={`text-sm font-bold tabular-nums ${
+                    type === "buy"
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : "text-red-500 dark:text-red-400"
+                  }`}>
+                    {formatCurrency(totalValue)}
+                  </span>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* ── Error / Success Alerts ── */}
+        <AnimatePresence>
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+            >
+              <div className="flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 dark:bg-red-950/30 dark:border-red-900/50">
+                <AlertCircle className="size-4 mt-0.5 shrink-0 text-red-500" />
+                <p className="text-xs text-red-700 dark:text-red-300 font-mono max-w-full overflow-x-auto">
+                  {error}
+                </p>
+              </div>
+            </motion.div>
+          )}
+          {successId && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+            >
+              <div className="flex items-center gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 dark:bg-emerald-950/30 dark:border-emerald-900/50">
+                <CheckCircle2 className="size-4 shrink-0 text-emerald-500" />
+                <div>
+                  <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">
+                    Transaction saved
+                  </p>
+                  <p className="text-[10px] font-mono text-emerald-600/70 dark:text-emerald-400/60 mt-0.5">
+                    ID: {successId}
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* ── Execution CTA Footer ── */}
+      <div className="px-5 py-4 border-t border-slate-100 dark:border-slate-800/60 bg-slate-50/50 dark:bg-slate-950/50">
+        <button
+          onClick={handleSubmit}
+          disabled={!isFormValid || isSubmitting}
+          className="w-full py-3 text-sm font-semibold rounded-xl flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 active:scale-[0.98]"
+        >
+          {isSubmitting ? (
+            <>
+              <Loader2 className="size-4 animate-spin" /> Saving…
+            </>
+          ) : (
+            "Add Transaction"
+          )}
+        </button>
+      </div>
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Main Modal Orchestrator                                            */
+/* ------------------------------------------------------------------ */
+function AddAssetModalContent() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const isOpen = searchParams.get("modal") === "add-asset";
+
+  const [step, setStep] = useState<ModalStep>("search");
+  const [selectedAsset, setSelectedAsset] = useState<SearchableAsset | null>(null);
+
+  const closeModal = useCallback(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("modal");
+    router.push(`${pathname}?${params.toString()}`);
+  }, [pathname, router, searchParams]);
+
+  // Reset state when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setStep("search");
+      setSelectedAsset(null);
+    }
+  }, [isOpen]);
+
+  const handleAssetSelect = useCallback((asset: SearchableAsset) => {
+    setSelectedAsset(asset);
+    setStep("transaction");
+  }, []);
+
+  const handleBack = useCallback(() => {
+    setStep("search");
+    setSelectedAsset(null);
+  }, []);
 
   if (!isOpen) return null;
 
   return (
     <AnimatePresence>
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          onClick={isSubmitting ? undefined : closeModal}
+          onClick={closeModal}
           className="absolute inset-0 bg-black/60 backdrop-blur-sm"
         />
 
+        {/* Modal Panel */}
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 10 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 10 }}
+          transition={{ type: "spring", stiffness: 400, damping: 30 }}
           className="relative w-full max-w-md overflow-hidden rounded-2xl bg-white dark:bg-slate-900 shadow-2xl border border-slate-200 dark:border-slate-800"
         >
-          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800/60">
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Add Transaction</h2>
-            <button onClick={closeModal} disabled={isSubmitting} className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-full transition-colors">
-              <X className="size-4" />
-            </button>
-          </div>
-
-          <div className="px-6 py-6 space-y-5 max-h-[65vh] overflow-y-auto">
-            <div className="space-y-1.5 relative">
-              <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Asset Ticker</label>
-              <input
-                type="text"
-                placeholder="e.g. AAPL, BTC, LUCK"
-                value={ticker}
-                onFocus={() => setShowDropdown(true)}
-                onChange={(e) => {
-                  setTicker(e.target.value.toUpperCase());
-                  setShowDropdown(true);
-                }}
-                onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
-                disabled={isSubmitting}
-                className={inputClass}
-              />
-
-              {showDropdown && assetSuggestions.length > 0 && (
-                <div className="absolute left-0 right-0 mt-1 z-50 max-h-48 overflow-auto rounded-md border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-lg">
-                  {assetSuggestions.map((a: any) => (
-                    <button
-                      key={a.ticker}
-                      type="button"
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        setTicker(a.ticker.toUpperCase());
-                        setAssetName(a.name);
-                        setAssetType(a.asset_type as AssetType);
-                        setShowDropdown(false);
-                      }}
-                      className="w-full text-left px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-900 dark:text-white transition-colors"
-                    >
-                      <span className="font-semibold mr-2">{a.ticker}</span>
-                      <span className="text-slate-500 dark:text-slate-400">- {a.name}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Asset Name</label>
-              <input type="text" placeholder="e.g. Apple Inc." value={assetName} onChange={(e) => setAssetName(e.target.value)} disabled={isSubmitting} className={inputClass} />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Asset Type</label>
-              <div className="flex p-1 bg-slate-100 dark:bg-slate-800 rounded-lg">
-                {ASSET_TYPES.map((at) => (
-                  <button
-                    key={at.value}
-                    type="button"
-                    disabled={isSubmitting}
-                    onClick={() => setAssetType(at.value)}
-                    className={`flex-1 flex items-center justify-center gap-1.5 rounded-md py-1.5 text-sm font-medium transition-all ${
-                      assetType === at.value ? "bg-white dark:bg-slate-950 text-slate-900 dark:text-white shadow-sm" : "text-slate-500"
-                    }`}
-                  >
-                    <span>{at.icon}</span> {at.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Transaction Type</label>
-              <div className="flex p-1 bg-slate-100 dark:bg-slate-800 rounded-lg">
-                <button type="button" onClick={() => setType("buy")} className={`flex-1 rounded-md py-1.5 text-sm font-medium transition-all ${type === "buy" ? "bg-white dark:bg-slate-950 text-emerald-600 shadow-sm" : "text-slate-500"}`}>Buy</button>
-                <button type="button" onClick={() => setType("sell")} className={`flex-1 rounded-md py-1.5 text-sm font-medium transition-all ${type === "sell" ? "bg-white dark:bg-slate-950 text-red-600 shadow-sm" : "text-slate-500"}`}>Sell</button>
-              </div>
-            </div>
-
-            <div className="flex gap-4">
-              <div className="space-y-1.5 flex-1">
-                <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Quantity</label>
-                <input type="number" step="any" placeholder="0.00" value={quantity} onChange={(e) => setQuantity(e.target.value)} disabled={isSubmitting} className={inputClass} />
-              </div>
-              <div className="space-y-1.5 flex-1">
-                <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Execution Price</label>
-                <input type="number" step="any" placeholder="0.00" value={price} onChange={(e) => setPrice(e.target.value)} disabled={isSubmitting} className={inputClass} />
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Date</label>
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} disabled={isSubmitting} className={inputClass} />
-            </div>
-
-            <AnimatePresence>
-              {error && (
-                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
-                  <div className="flex items-start gap-2.5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 dark:bg-red-950/30 dark:border-red-900/50">
-                    <AlertCircle className="size-4 mt-0.5 shrink-0 text-red-500" />
-                    <p className="text-sm text-red-700 dark:text-red-300 font-mono text-xs max-w-full overflow-x-auto">{error}</p>
-                  </div>
+          <AnimatePresence mode="wait">
+            {step === "search" ? (
+              <motion.div
+                key="step-search"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.2 }}
+              >
+                <AssetSearchStep onSelect={handleAssetSelect} onClose={closeModal} />
+              </motion.div>
+            ) : (
+              selectedAsset && (
+                <motion.div
+                  key="step-transaction"
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 20 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <TransactionStep
+                    selectedAsset={selectedAsset}
+                    onBack={handleBack}
+                    onClose={closeModal}
+                  />
                 </motion.div>
-              )}
-              {successId && (
-                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
-                  <div className="flex items-center gap-2.5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 dark:bg-emerald-950/30 dark:border-emerald-900/50">
-                    <CheckCircle2 className="size-4 shrink-0 text-emerald-500" />
-                    <div>
-                      <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">Transaction saved</p>
-                      <p className="text-[10px] font-mono text-emerald-600/70 dark:text-emerald-400/60 mt-0.5">ID: {successId}</p>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-
-          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-100 dark:border-slate-800/60 bg-slate-50/50 dark:bg-slate-950/50">
-            <button onClick={closeModal} disabled={isSubmitting} className="px-4 py-2 text-sm text-slate-700 dark:text-slate-300">Cancel</button>
-            <button onClick={handleSubmit} disabled={!isFormValid || isSubmitting} className="px-4 py-2 text-sm text-white bg-slate-900 dark:bg-white dark:text-slate-900 rounded-lg flex items-center gap-2 min-w-[140px] justify-center">
-              {isSubmitting ? <><Loader2 className="size-4 animate-spin" /> Saving…</> : "Save Transaction"}
-            </button>
-          </div>
+              )
+            )}
+          </AnimatePresence>
         </motion.div>
       </div>
     </AnimatePresence>
