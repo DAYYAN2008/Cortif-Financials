@@ -21,14 +21,25 @@ SUPABASE_KEY: str = os.environ.get("NEXT_PUBLIC_SUPABASE_ANON_KEY", "")
 logger = logging.getLogger("news_service")
 
 # ── RSS Feed Sources ────────────────────────────────────────────────────────
-# Each entry is (human_readable_name, url) so the stored `source` column
-# is a clean label instead of a raw URL.
-RSS_FEEDS: list[tuple[str, str]] = [
-    ("CNBC Business",   "https://www.cnbc.com/id/100003114/device/rss/rss.html"),
-    ("Yahoo Finance",   "https://www.yahoo.com/news/rss/finance"),
-    ("WSJ Markets",     "http://www.wsj.com/xml/rss/3_7031.xml"),
-    ("Investing.com",   "https://www.investing.com/rss/news_25.rss"),
-]
+NEW_SOURCES = {
+    "crypto": [
+        "https://cointelegraph.com/rss",
+        "http://feeds.feedburner.com/CoinDesk"
+    ],
+    "commodities": [
+        "https://www.marketwatch.com/rss/commentary"
+    ],
+    "stocks": [
+        "https://www.cnbc.com/id/100003114/device/rss/rss.html",
+        "https://www.yahoo.com/news/rss/finance",
+        "http://www.wsj.com/xml/rss/3_7031.xml",
+        "https://www.investing.com/rss/news_25.rss"
+    ],
+    "stocks_and_macro": [
+        "https://search.cnbc.com/rs/search/view.xml?partnerId=2000&keywords=finance",
+        "https://feeds.content.marketwatch.com/marketwatch/feeds/bulletins"
+    ]
+}
 
 # Custom headers to avoid 403 from some RSS providers
 FEED_REQUEST_HEADERS = {
@@ -54,11 +65,22 @@ def _extract_image_url(entry: dict) -> Optional[str]:
     """
     Extract the best available image URL from an RSS entry.
     Checks, in order:
-      1. media:content  (media_content)
-      2. media:thumbnail (media_thumbnail)
-      3. enclosure tags
+      1. enclosure (high-res images for CoinTelegraph/CoinDesk)
+      2. media:content  (media_content)
+      3. media:thumbnail (media_thumbnail)
+      4. links with type image
     """
-    # 1. media:content
+    # 1. enclosure (prioritized for high-res crypto feeds)
+    enclosures = entry.get("enclosures", [])
+    if enclosures:
+        for enc in enclosures:
+            enc_type = enc.get("type", "")
+            if enc_type == "image/jpeg" or enc_type.startswith("image") or enc.get("url", "").endswith(
+                (".jpg", ".jpeg", ".png", ".webp", ".gif")
+            ):
+                return enc.get("url", "")
+
+    # 2. media:content
     media_content = entry.get("media_content", [])
     if media_content:
         for media in media_content:
@@ -66,23 +88,13 @@ def _extract_image_url(entry: dict) -> Optional[str]:
             if url:
                 return url
 
-    # 2. media:thumbnail
+    # 3. media:thumbnail
     media_thumbnail = entry.get("media_thumbnail", [])
     if media_thumbnail:
         for thumb in media_thumbnail:
             url = thumb.get("url", "")
             if url:
                 return url
-
-    # 3. enclosure
-    enclosures = entry.get("enclosures", [])
-    if enclosures:
-        for enc in enclosures:
-            enc_type = enc.get("type", "")
-            if enc_type.startswith("image") or enc.get("url", "").endswith(
-                (".jpg", ".jpeg", ".png", ".webp", ".gif")
-            ):
-                return enc.get("url", "")
 
     # 4. links with type image
     links = entry.get("links", [])
@@ -132,6 +144,25 @@ def _clean_summary(raw: str) -> str:
 
 # ── Core Functions ──────────────────────────────────────────────────────────
 
+def _assign_category(base_cat: str, title: str, summary: str) -> str:
+    """Determine the category based on feed origin (Rule A) and keywords (Rule B)."""
+    text = (title + " " + summary).lower()
+    
+    # Rule B: Keyword Fallback
+    if any(kw in text for kw in ["gold", "oil", "brent", "crude"]):
+        return "commodities"
+    if any(kw in text for kw in ["bitcoin", "solana", "eth"]):
+        return "crypto"
+    if any(kw in text for kw in ["fed", "inflation", "cpi", "macro"]):
+        return "macro"
+        
+    # Rule A: Default to the feed's base category if no keyword overrides
+    if base_cat == "stocks_and_macro":
+        return "stocks"
+    
+    return base_cat
+
+
 def sync_external_news() -> dict:
     """
     Fetch articles from all configured RSS feeds and upsert unique
@@ -144,58 +175,63 @@ def sync_external_news() -> dict:
     total_inserted = 0
     errors: list[str] = []
 
-    for source_name, feed_url in RSS_FEEDS:
-        logger.info("Fetching feed: %s (%s)", source_name, feed_url)
-        try:
-            feed = feedparser.parse(
-                feed_url,
-                request_headers=FEED_REQUEST_HEADERS,
-            )
+    for base_cat, feed_urls in NEW_SOURCES.items():
+        for feed_url in feed_urls:
+            logger.info("Fetching feed: %s (%s)", base_cat, feed_url)
+            try:
+                feed = feedparser.parse(
+                    feed_url,
+                    request_headers=FEED_REQUEST_HEADERS,
+                )
 
-            if feed.bozo and not feed.entries:
-                err_msg = f"Feed error for {source_name}: {feed.bozo_exception}"
-                logger.warning(err_msg)
-                errors.append(err_msg)
-                continue
-
-            articles = []
-            for entry in feed.entries:
-                title = entry.get("title", "").strip()
-                link = entry.get("link", "").strip()
-
-                if not title or not link:
+                if feed.bozo and not feed.entries:
+                    err_msg = f"Feed error for {feed_url}: {feed.bozo_exception}"
+                    logger.warning(err_msg)
+                    errors.append(err_msg)
                     continue
+                    
+                source_name = feed.feed.title if hasattr(feed, "feed") and hasattr(feed.feed, "title") else feed_url.split("/")[2]
 
-                summary_raw = entry.get("summary", entry.get("description", ""))
-                summary = _clean_summary(summary_raw) if summary_raw else ""
+                articles = []
+                for entry in feed.entries:
+                    title = entry.get("title", "").strip()
+                    link = entry.get("link", "").strip()
 
-                articles.append({
-                    "title": title,
-                    "link": link,
-                    "summary": summary[:1000],  # Cap at 1000 chars
-                    "published_date": _parse_published_date(entry),
-                    "image_url": _extract_image_url(entry),
-                    "source": source_name,
-                })
+                    if not title or not link:
+                        continue
 
-            total_fetched += len(articles)
+                    summary_raw = entry.get("summary", entry.get("description", ""))
+                    summary = _clean_summary(summary_raw) if summary_raw else ""
+                    category = _assign_category(base_cat, title, summary)
 
-            if articles:
-                # Upsert – skip duplicates based on unique `link` constraint
-                result = (
-                    supabase.table("external_news")
-                    .upsert(articles, on_conflict="link")
-                    .execute()
-                )
-                total_inserted += len(result.data) if result.data else 0
-                logger.info(
-                    "  ✓ %s: %d articles processed", source_name, len(articles)
-                )
+                    articles.append({
+                        "title": title,
+                        "link": link,
+                        "summary": summary[:1000],  # Cap at 1000 chars
+                        "published_date": _parse_published_date(entry),
+                        "image_url": _extract_image_url(entry),
+                        "source": source_name,
+                        "category": category,
+                    })
 
-        except Exception as exc:
-            err_msg = f"Failed to process {source_name} ({feed_url}): {exc}"
-            logger.error(err_msg)
-            errors.append(err_msg)
+                total_fetched += len(articles)
+
+                if articles:
+                    # Upsert – skip duplicates based on unique `link` constraint
+                    result = (
+                        supabase.table("external_news")
+                        .upsert(articles, on_conflict="link")
+                        .execute()
+                    )
+                    total_inserted += len(result.data) if result.data else 0
+                    logger.info(
+                        "  ✓ %s (%s): %d articles processed", source_name, base_cat, len(articles)
+                    )
+
+            except Exception as exc:
+                err_msg = f"Failed to process {feed_url}: {exc}"
+                logger.error(err_msg)
+                errors.append(err_msg)
 
     summary = {
         "fetched": total_fetched,
@@ -206,17 +242,16 @@ def sync_external_news() -> dict:
     return summary
 
 
-def get_latest_news(limit: int = 8) -> list[dict]:
+def get_latest_news(limit: int = 8, category: Optional[str] = None) -> list[dict]:
     """
     Retrieve the most recent articles from the `external_news` table,
-    ordered by published_date descending.
+    ordered by published_date descending. Can optionally filter by category.
     """
     supabase = _get_supabase_client()
-    result = (
-        supabase.table("external_news")
-        .select("id, title, link, summary, published_date, image_url, source")
-        .order("published_date", desc=True)
-        .limit(limit)
-        .execute()
-    )
+    query = supabase.table("external_news").select("id, title, link, summary, published_date, image_url, source, category")
+    
+    if category and category != "all":
+        query = query.eq("category", category)
+        
+    result = query.order("published_date", desc=True).limit(limit).execute()
     return result.data if result.data else []

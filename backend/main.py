@@ -127,13 +127,16 @@ async def websocket_markets(websocket: WebSocket):
 # ── News Hub Routes ─────────────────────────────────────────────────────────
 
 @app.get("/api/news/latest")
-async def get_latest_articles(limit: int = Query(default=8, ge=1, le=50)):
+async def get_latest_articles(
+    limit: int = Query(default=8, ge=1, le=50),
+    category: str = Query(default=None)
+):
     """
     Return the most recent articles from the external_news table.
-    Defaults to 8 articles, max 50.
+    Defaults to 8 articles, max 50. Optionally filter by category.
     """
     try:
-        articles = get_latest_news(limit=limit)
+        articles = get_latest_news(limit=limit, category=category)
         return {"articles": articles, "count": len(articles)}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
