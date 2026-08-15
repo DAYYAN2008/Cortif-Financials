@@ -28,17 +28,17 @@ NEW_SOURCES = {
         "http://feeds.feedburner.com/CoinDesk"
     ],
     "commodities": [
-        "https://www.marketwatch.com/rss/commentary"
+        "https://feeds.content.dowjones.io/public/rss/mw_topstories"
     ],
     "stocks": [
         "https://www.cnbc.com/id/100003114/device/rss/rss.html",
-        "https://www.yahoo.com/news/rss/finance",
-        "http://www.wsj.com/xml/rss/3_7031.xml",
+        "https://finance.yahoo.com/news/rssindex",
+        "https://feeds.a.dj.com/rss/WSJcomUSBusiness.xml",
         "https://www.investing.com/rss/news_25.rss"
     ],
     "stocks_and_macro": [
         "https://search.cnbc.com/rs/search/view.xml?partnerId=2000&keywords=finance",
-        "https://feeds.content.marketwatch.com/marketwatch/feeds/bulletins"
+        "https://feeds.content.dowjones.io/public/rss/mw_bulletins"
     ]
 }
 
@@ -48,7 +48,9 @@ FEED_REQUEST_HEADERS = {
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
         "Chrome/120.0.0.0 Safari/537.36"
-    )
+    ),
+    "Accept": "application/rss+xml, application/xml, text/xml, */*",
+    "Accept-Language": "en-US,en;q=0.9"
 }
 
 
