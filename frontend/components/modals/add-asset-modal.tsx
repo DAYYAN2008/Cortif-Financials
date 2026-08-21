@@ -17,7 +17,6 @@ import {
   ChevronDown,
   ChevronLeft,
 } from "lucide-react";
-import { createClient } from "@/utils/supabase/client";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -445,7 +444,6 @@ function TransactionStep({
   onClose: () => void;
 }) {
   const router = useRouter();
-  const supabase = createClient();
   const dateInputRef = useRef<HTMLInputElement>(null);
 
   const [type, setType] = useState<TransactionType>("buy");
@@ -485,15 +483,6 @@ function TransactionStep({
     setIsSubmitting(true);
 
     try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session?.access_token) {
-        setError("You must be logged in to add a transaction.");
-        setIsSubmitting(false);
-        return;
-      }
-
       const payload: Record<string, unknown> = {
         ticker: selectedAsset.symbol.toUpperCase(),
         asset_name: selectedAsset.name,
@@ -510,7 +499,6 @@ function TransactionStep({
       const res = await fetch(`${BACKEND_URL}/api/v1/portfolio/transactions`, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${session.access_token}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify(payload),

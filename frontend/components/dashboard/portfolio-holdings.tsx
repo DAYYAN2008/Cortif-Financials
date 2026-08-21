@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/utils/currency";
-import { createClient } from "@/utils/supabase/client";
 
 const BACKEND_URL =
   process.env.NEXT_PUBLIC_BACKEND_URL ?? "https://dayyanyasir-cortif-backend.hf.space";
@@ -305,16 +304,10 @@ export function PortfolioHoldings({ baseCurrency }: { baseCurrency: string }) {
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const supabase = createClient();
 
   const fetchLiveHoldings = useCallback(async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) return;
-
-      const res = await fetch(`${BACKEND_URL}/api/v1/portfolio/holdings`, {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
+      const res = await fetch(`${BACKEND_URL}/api/v1/portfolio/holdings`);
 
       if (!res.ok) {
         throw new Error(`Holdings fetch failed (${res.status})`);
@@ -329,7 +322,7 @@ export function PortfolioHoldings({ baseCurrency }: { baseCurrency: string }) {
     } finally {
       setIsLoading(false);
     }
-  }, [supabase.auth]);
+  }, []);
 
   const renderHoldingsRows = (rawRows: any[]) => {
     const totalBookValue = rawRows.reduce((acc, r) => acc + (parseFloat(r.total_cost) || 0), 0);

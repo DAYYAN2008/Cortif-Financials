@@ -9,7 +9,7 @@ import {
   Calendar,
   Loader2,
 } from "lucide-react";
-import { useAuthRedirect } from "@/lib/use-auth-redirect";
+import { useRouter } from "next/navigation";
 import { useMarketData } from "@/lib/use-market-data";
 import type { MarketAsset, PayoutAsset } from "@/types/market";
 
@@ -144,7 +144,7 @@ function AssetListCard({
   layoutGroup: string;
 }) {
   const [activeTab, setActiveTab] = useState<TabFilter>("active");
-  const { navigate, isLoading } = useAuthRedirect();
+  const router = useRouter();
 
   const filteredAssets = useMemo(() => {
     switch (activeTab) {
@@ -180,7 +180,7 @@ function AssetListCard({
                 key={`${layoutGroup}-${asset.symbol}`}
                 asset={asset}
                 index={idx}
-                onClick={() => navigate(targetPath)}
+                onClick={() => router.push(targetPath)}
               />
             ))
           ) : (
@@ -198,13 +198,9 @@ function AssetListCard({
       {/* View All Footer */}
       <div className="border-t border-border/50 px-5 py-3">
         <button
-          onClick={() => navigate(targetPath)}
-          disabled={isLoading}
-          className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer group disabled:opacity-50"
+          onClick={() => router.push(targetPath)}
+          className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer group"
         >
-          {isLoading ? (
-            <Loader2 className="size-3 animate-spin" />
-          ) : null}
           View All
           <ChevronRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
         </button>
@@ -280,7 +276,7 @@ function UpcomingPayoutsCard({
   payouts: PayoutAsset[];
   targetPath: string;
 }) {
-  const { navigate, isLoading } = useAuthRedirect();
+  const router = useRouter();
 
   return (
     <div className="bg-card border border-border rounded-2xl overflow-hidden flex flex-col transition-all duration-300 hover:border-primary/15 hover:shadow-lg hover:shadow-black/5 dark:hover:shadow-black/30">
@@ -307,7 +303,7 @@ function UpcomingPayoutsCard({
             key={payout.symbol}
             payout={payout}
             index={idx}
-            onClick={() => navigate(targetPath)}
+            onClick={() => router.push(targetPath)}
           />
         ))}
       </div>
@@ -315,13 +311,9 @@ function UpcomingPayoutsCard({
       {/* View All Footer */}
       <div className="border-t border-border/50 px-5 py-3">
         <button
-          onClick={() => navigate(targetPath)}
-          disabled={isLoading}
-          className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer group disabled:opacity-50"
+          onClick={() => router.push(targetPath)}
+          className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer group"
         >
-          {isLoading ? (
-            <Loader2 className="size-3 animate-spin" />
-          ) : null}
           View All
           <ChevronRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
         </button>

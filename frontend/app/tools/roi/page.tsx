@@ -1,35 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { ArrowLeft, Calculator } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { createClient } from "@/utils/supabase/client";
 import { formatCurrency, CURRENCY_GLYPHS } from "@/utils/currency";
 
 export default function ROICalculatorPage() {
   const [initial, setInitial] = useState<string>("1000");
   const [final, setFinal] = useState<string>("1500");
-  const [currency, setCurrency] = useState<string>("USD");
-
-  const supabase = createClient();
-
-  useEffect(() => {
-    async function fetchCurrency() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data } = await supabase
-          .from("profiles")
-          .select("base_currency")
-          .eq("id", user.id)
-          .single();
-        if (data?.base_currency) {
-          setCurrency(data.base_currency);
-        }
-      }
-    }
-    fetchCurrency();
-  }, []);
+  const currency = "USD";
 
   const glyph = CURRENCY_GLYPHS[currency] || "$";
 
@@ -51,7 +31,7 @@ export default function ROICalculatorPage() {
   return (
     <div className="max-w-[1400px] mx-auto p-4 lg:p-8 flex flex-col space-y-8">
       <Link 
-        href="/dashboard/tools" 
+        href="/tools" 
         className="inline-flex items-center text-sm font-medium text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors w-fit"
       >
         <ArrowLeft className="mr-2 size-4" />

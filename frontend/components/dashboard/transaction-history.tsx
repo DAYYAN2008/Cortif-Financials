@@ -13,7 +13,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/utils/currency";
-import { createClient } from "@/utils/supabase/client";
 
 const BACKEND_URL =
   process.env.NEXT_PUBLIC_BACKEND_URL ?? "https://dayyanyasir-cortif-backend.hf.space";
@@ -171,16 +170,9 @@ export function TransactionHistory({
 }) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const supabase = createClient();
-
   const fetchLiveTransactions = useCallback(async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) return;
-
-      const res = await fetch(`${BACKEND_URL}/api/v1/portfolio/transactions`, {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
+      const res = await fetch(`${BACKEND_URL}/api/v1/portfolio/transactions`);
 
       if (!res.ok) {
         console.error(`Transaction history fetch failed (${res.status})`);
@@ -225,7 +217,7 @@ export function TransactionHistory({
     } finally {
       setIsLoading(false);
     }
-  }, [supabase.auth]);
+  }, []);
 
   useEffect(() => {
     fetchLiveTransactions();

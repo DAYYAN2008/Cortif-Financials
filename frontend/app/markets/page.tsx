@@ -4,9 +4,9 @@ import { Suspense } from "react";
 import { MarketTerminal } from "@/components/dashboard/market-terminal";
 
 /**
- * /dashboard/markets — Master Market Data Terminal.
+ * /markets — Master Market Data Terminal.
  *
- * Full-width dashboard view with tabbed data tables for
+ * Full-width view with tabbed data tables for
  * Stocks, Mutual Funds, Forex, Commodities, and Dividends.
  *
  * Wrapped in Suspense for useSearchParams compatibility.

@@ -9,7 +9,7 @@ import {
   TrendingDown,
   Loader2,
 } from "lucide-react";
-import { useAuthRedirect } from "@/lib/use-auth-redirect";
+import { useRouter } from "next/navigation";
 import { useMarketData } from "@/lib/use-market-data";
 import type { ForexPair, CommodityAsset } from "@/types/market";
 
@@ -157,7 +157,7 @@ export function MarketCarousel(props: MarketCarouselProps) {
   const commodities = data.commodities;
   const scrollRef = useRef<HTMLDivElement>(null);
   const [activeCategory, setActiveCategory] = useState<Category>("forex");
-  const { navigate, isLoading } = useAuthRedirect();
+  const router = useRouter();
 
   const scrollLeft = () => {
     scrollRef.current?.scrollBy({ left: -280, behavior: "smooth" });
@@ -208,11 +208,9 @@ export function MarketCarousel(props: MarketCarouselProps) {
         {/* Navigation Arrows */}
         <div className="flex items-center gap-3">
           <button
-            onClick={() => navigate(targetPath)}
-            disabled={isLoading}
-            className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer mr-2 flex items-center gap-1 disabled:opacity-50"
+            onClick={() => router.push(targetPath)}
+            className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer mr-2 flex items-center gap-1"
           >
-            {isLoading && <Loader2 className="size-3 animate-spin" />}
             View All
             <ChevronRight className="size-3.5" />
           </button>
@@ -253,14 +251,14 @@ export function MarketCarousel(props: MarketCarouselProps) {
                     <ForexCard
                       key={`${pair.base}-${pair.quote}`}
                       pair={pair}
-                      onClick={() => navigate(targetPath)}
+                      onClick={() => router.push(targetPath)}
                     />
                   ))
                 : commodities.map((commodity) => (
                     <CommodityCard
                       key={commodity.id}
                       commodity={commodity}
-                      onClick={() => navigate(targetPath)}
+                      onClick={() => router.push(targetPath)}
                     />
                   ))}
             </div>

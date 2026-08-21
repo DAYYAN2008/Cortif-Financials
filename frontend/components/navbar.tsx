@@ -15,6 +15,8 @@ import {
   CircleDollarSign,
   Globe,
   ArrowLeftRight,
+  Briefcase,
+  Wrench,
   X,
 } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
@@ -22,8 +24,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
-import { createClient } from "@/utils/supabase/client";
-import type { User } from "@supabase/supabase-js";
 import {
   Sheet,
   SheetTrigger,
@@ -149,9 +149,6 @@ function BrandLogo() {
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  Command-K Search Trigger                                           */
-/* ------------------------------------------------------------------ */
 /* ------------------------------------------------------------------ */
 /*  Command-K Search Trigger / Adaptive Search Bar                    */
 /* ------------------------------------------------------------------ */
@@ -295,7 +292,7 @@ function CommandKSearch() {
 /* ------------------------------------------------------------------ */
 /*  Mobile Navigation Sheet                                            */
 /* ------------------------------------------------------------------ */
-function MobileNav({ user, loading }: { user: User | null; loading: boolean }) {
+function MobileNav() {
   return (
     <Sheet>
       <SheetTrigger
@@ -341,10 +338,17 @@ function MobileNav({ user, loading }: { user: User | null; loading: boolean }) {
           <span className="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">
             Markets
           </span>
-          <MobileLink href="/dashboard/markets/stocks" label="Stocks" />
-          <MobileLink href="/dashboard/markets/mutual-funds" label="Mutual Funds" />
-          <MobileLink href="/dashboard/markets/commodities" label="Commodities" />
-          <MobileLink href="/dashboard/markets/forex" label="Forex" />
+          <MobileLink href="/markets?category=stocks" label="Stocks" />
+          <MobileLink href="/markets?category=mutual-funds" label="Mutual Funds" />
+          <MobileLink href="/markets?category=commodities" label="Commodities" />
+          <MobileLink href="/markets?category=forex" label="Forex" />
+
+          {/* Portfolio & Tools */}
+          <span className="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+            Workspace
+          </span>
+          <MobileLink href="/portfolio" label="Portfolio" />
+          <MobileLink href="/tools" label="Financial Tools" />
 
           {/* General */}
           <span className="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">
@@ -354,45 +358,9 @@ function MobileNav({ user, loading }: { user: User | null; loading: boolean }) {
           <MobileLink label="Academy" />
         </nav>
 
-        <div className="mt-auto border-t border-slate-100 dark:border-slate-800 p-4 flex flex-col gap-2">
-          {!loading && (
-            user ? (
-              <>
-                <Button
-                  variant="ghost"
-                  className="w-full justify-center h-9 text-[13px] font-medium text-slate-700 dark:text-slate-300 cursor-pointer"
-                  onClick={async () => {
-                    const supabase = createClient();
-                    await supabase.auth.signOut();
-                  }}
-                >
-                  Log Out
-                </Button>
-                <Button 
-                  className="w-full justify-center h-9 text-[13px] font-medium bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200 cursor-pointer"
-                  render={<Link href="/dashboard" />}
-                >
-                  Go to Dashboard
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button
-                  variant="ghost"
-                  className="w-full justify-center h-9 text-[13px] font-medium text-slate-700 dark:text-slate-300"
-                  render={<Link href="/login" />}
-                >
-                  Log In
-                </Button>
-                <Button 
-                  className="w-full justify-center h-9 text-[13px] font-medium bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200"
-                  render={<Link href="/login" />}
-                >
-                  Sign Up
-                </Button>
-              </>
-            )
-          )}
+        <div className="mt-auto border-t border-slate-100 dark:border-slate-800 p-4 flex items-center justify-between">
+          <span className="text-[13px] font-medium text-slate-500 dark:text-slate-400">Theme</span>
+          <ThemeToggle />
         </div>
       </SheetContent>
     </Sheet>
@@ -428,28 +396,6 @@ function MobileLink({ href, label }: { href?: string; label: string }) {
 /*  Main Navbar Export                                                  */
 /* ------------------------------------------------------------------ */
 export function Navbar() {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const supabase = createClient();
-    
-    supabase.auth.getUser().then(({ data }) => {
-      setUser(data.user);
-      setLoading(false);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setUser(session?.user ?? null);
-      }
-    );
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, []);
-
   return (
     <header
       id="main-navbar"
@@ -529,31 +475,57 @@ export function Navbar() {
                     MARKETS
                   </span>
                   <DropdownItem
-                    href="/dashboard/markets/stocks"
+                    href="/markets?category=stocks"
                     icon={TrendingUp}
                     label="Stocks"
                     showChevron
                   />
                   <DropdownItem
-                    href="/dashboard/markets/mutual-funds"
+                    href="/markets?category=mutual-funds"
                     icon={CircleDollarSign}
                     label="Mutual Funds"
                     showChevron
                   />
                   <DropdownItem
-                    href="/dashboard/markets/commodities"
+                    href="/markets?category=commodities"
                     icon={Globe}
                     label="Commodities"
                     showChevron
                   />
                   <DropdownItem
-                    href="/dashboard/markets/forex"
+                    href="/markets?category=forex"
                     icon={ArrowLeftRight}
                     label="Forex"
                     showChevron
                   />
                 </div>
               </NavigationMenuContent>
+            </NavigationMenuItem>
+
+            {/* ── Portfolio (Direct Link) ── */}
+            <NavigationMenuItem>
+              <NavigationMenuLink
+                href="/portfolio"
+                render={<Link href="/portfolio" />}
+                className={`${navigationMenuTriggerStyle()} cursor-pointer`}
+              >
+                <span className="text-[13px] font-medium text-slate-700 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white">
+                  Portfolio
+                </span>
+              </NavigationMenuLink>
+            </NavigationMenuItem>
+
+            {/* ── Tools (Direct Link) ── */}
+            <NavigationMenuItem>
+              <NavigationMenuLink
+                href="/tools"
+                render={<Link href="/tools" />}
+                className={`${navigationMenuTriggerStyle()} cursor-pointer`}
+              >
+                <span className="text-[13px] font-medium text-slate-700 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white">
+                  Tools
+                </span>
+              </NavigationMenuLink>
             </NavigationMenuItem>
 
             {/* ── News (Plain Text) ── */}
@@ -585,7 +557,7 @@ export function Navbar() {
         {/* ---- Spacer ---- */}
         <div className="flex-1" />
 
-        {/* ---- Right: Search + Auth ---- */}
+        {/* ---- Right: Search + Theme ---- */}
         <div className="flex items-center gap-4">
           <CommandKSearch />
 
@@ -600,56 +572,8 @@ export function Navbar() {
           {/* Theme toggle */}
           <ThemeToggle />
 
-          {/* Desktop auth buttons */}
-          <div className="hidden lg:flex items-center gap-2">
-            {!loading && (
-              user ? (
-                <>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-[13px] font-medium text-slate-700 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white cursor-pointer"
-                    onClick={async () => {
-                      const supabase = createClient();
-                      await supabase.auth.signOut();
-                    }}
-                  >
-                    Log Out
-                  </Button>
-                  <Button
-                    size="sm"
-                    className="text-[13px] font-medium bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200 cursor-pointer"
-                    render={<Link href="/dashboard" />}
-                  >
-                    Go to Dashboard
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <Button
-                    id="login-button"
-                    variant="ghost"
-                    size="sm"
-                    className="text-[13px] font-medium text-slate-700 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white cursor-pointer"
-                    render={<Link href="/login" />}
-                  >
-                    Log In
-                  </Button>
-                  <Button
-                    id="signup-button"
-                    size="sm"
-                    className="text-[13px] font-medium bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200 cursor-pointer"
-                    render={<Link href="/login" />}
-                  >
-                    Sign Up
-                  </Button>
-                </>
-              )
-            )}
-          </div>
-
           {/* Mobile hamburger */}
-          <MobileNav user={user} loading={loading} />
+          <MobileNav />
         </div>
       </div>
     </header>

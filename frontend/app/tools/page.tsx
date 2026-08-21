@@ -15,7 +15,7 @@ const toolsList = [
     name: "ROI Calculator",
     description: "Calculate the Return on Investment and absolute profit/loss for your trades.",
     icon: Calculator,
-    href: "/dashboard/tools/roi",
+    href: "/tools/roi",
     color: "text-blue-500 dark:text-blue-400",
     bg: "bg-blue-500/10 dark:bg-blue-500/20"
   },
@@ -24,7 +24,7 @@ const toolsList = [
     name: "CAGR Calculator",
     description: "Determine the Compound Annual Growth Rate over a specific duration.",
     icon: TrendingUp,
-    href: "/dashboard/tools/cagr",
+    href: "/tools/cagr",
     color: "text-emerald-500 dark:text-emerald-400",
     bg: "bg-emerald-500/10 dark:bg-emerald-500/20"
   },
@@ -33,7 +33,7 @@ const toolsList = [
     name: "SIP Auto-Invest",
     description: "Project your wealth growth through Systematic Investment Plans over time.",
     icon: PiggyBank,
-    href: "/dashboard/tools/sip",
+    href: "/tools/sip",
     color: "text-purple-500 dark:text-purple-400",
     bg: "bg-purple-500/10 dark:bg-purple-500/20"
   },
@@ -42,7 +42,7 @@ const toolsList = [
     name: "Tax Deduction",
     description: "Estimate your tax liabilities and potential deductions for the fiscal year.",
     icon: Scissors,
-    href: "/dashboard/tools/tax",
+    href: "/tools/tax",
     color: "text-rose-500 dark:text-rose-400",
     bg: "bg-rose-500/10 dark:bg-rose-500/20"
   },
@@ -51,7 +51,7 @@ const toolsList = [
     name: "Position Risk Manager",
     description: "Calculate optimal position sizing based on your risk tolerance and stop-loss.",
     icon: ShieldAlert,
-    href: "/dashboard/tools/risk",
+    href: "/tools/risk",
     color: "text-amber-500 dark:text-amber-400",
     bg: "bg-amber-500/10 dark:bg-amber-500/20"
   },
@@ -60,7 +60,7 @@ const toolsList = [
     name: "Average Down",
     description: "Calculate your new break-even price when adding to a losing position.",
     icon: TrendingDown,
-    href: "/dashboard/tools/average-down",
+    href: "/tools/average-down",
     color: "text-cyan-500 dark:text-cyan-400",
     bg: "bg-cyan-500/10 dark:bg-cyan-500/20"
   }
