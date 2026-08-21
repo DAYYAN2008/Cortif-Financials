@@ -102,6 +102,7 @@ function PillTabs({
 }: {
   activeTab: TabFilter;
   onTabChange: (tab: TabFilter) => void;
+  layoutGroup: string;
 }) {
   return (
     <div className="flex items-center gap-1 p-0.5 rounded-full bg-secondary/60 border border-border/50">
@@ -117,7 +118,7 @@ function PillTabs({
         >
           {activeTab === tab.key && (
             <motion.div
-              layoutId="pill-indicator"
+              layoutId={`pill-indicator-${layoutGroup}`}
               className="absolute inset-0 bg-primary rounded-full"
               transition={{ type: "spring", stiffness: 400, damping: 30 }}
             />
@@ -168,7 +169,7 @@ function AssetListCard({
         <h3 className="text-base font-bold text-foreground tracking-tight">
           {title}
         </h3>
-        <PillTabs activeTab={activeTab} onTabChange={setActiveTab} />
+        <PillTabs activeTab={activeTab} onTabChange={setActiveTab} layoutGroup={layoutGroup} />
       </div>
 
       {/* Asset List */}

@@ -139,3 +139,39 @@ export const SAMPLE_PAYOUTS: PayoutAsset[] = [
   { symbol: "FFC",   name: "Fauji Fertilizer",    exDate: "2026-06-28", yieldPct: 6.30, indicator: "XD" },
   { symbol: "PPL",   name: "Pakistan Petroleum",  exDate: "2026-07-02", yieldPct: 3.18, indicator: "XD" },
 ];
+
+/** Sample stocks */
+export const SAMPLE_STOCKS: MarketAsset[] = [
+  { symbol: "AAPL", name: "Apple Inc.", price: 175.24, change: 1.2, absChange: 2.10, volume: "12M", sparkline: generateSparkline(1) },
+  { symbol: "MSFT", name: "Microsoft", price: 340.50, change: -0.5, absChange: -1.70, volume: "18M", sparkline: generateSparkline(-1) },
+  { symbol: "GOOGL", name: "Alphabet", price: 135.10, change: 2.1, absChange: 2.78, volume: "8M", sparkline: generateSparkline(1) },
+  { symbol: "AMZN", name: "Amazon", price: 128.40, change: -1.2, absChange: -1.56, volume: "22M", sparkline: generateSparkline(-1) },
+  { symbol: "TSLA", name: "Tesla", price: 215.30, change: 3.4, absChange: 7.08, volume: "45M", sparkline: generateSparkline(1) },
+  { symbol: "META", name: "Meta Platforms", price: 310.20, change: 0.8, absChange: 2.46, volume: "15M", sparkline: generateSparkline(1) },
+  { symbol: "NVDA", name: "NVIDIA", price: 420.80, change: -2.3, absChange: -9.91, volume: "35M", sparkline: generateSparkline(-1) },
+  { symbol: "NFLX", name: "Netflix", price: 405.15, change: 1.5, absChange: 5.98, volume: "5M", sparkline: generateSparkline(1) },
+];
+
+/** Sample forex */
+export const SAMPLE_FOREX: ForexPair[] = [
+  { base: "EUR", quote: "USD", rate: 1.09, change: -0.2, flagBase: "🇪🇺", flagQuote: "🇺🇸", sparkline: generateSparkline(-1) },
+  { base: "GBP", quote: "USD", rate: 1.25, change: 0.1, flagBase: "🇬🇧", flagQuote: "🇺🇸", sparkline: generateSparkline(1) },
+  { base: "USD", quote: "JPY", rate: 149.2, change: 0.5, flagBase: "🇺🇸", flagQuote: "🇯🇵", sparkline: generateSparkline(1) },
+  { base: "AUD", quote: "USD", rate: 0.64, change: -0.8, flagBase: "🇦🇺", flagQuote: "🇺🇸", sparkline: generateSparkline(-1) },
+  { base: "USD", quote: "CAD", rate: 1.36, change: 0.3, flagBase: "🇺🇸", flagQuote: "🇨🇦", sparkline: generateSparkline(1) },
+  { base: "USD", quote: "CHF", rate: 0.89, change: -0.1, flagBase: "🇺🇸", flagQuote: "🇨🇭", sparkline: generateSparkline(-1) },
+  { base: "NZD", quote: "USD", rate: 0.59, change: -1.2, flagBase: "🇳🇿", flagQuote: "🇺🇸", sparkline: generateSparkline(-1) },
+  { base: "USD", quote: "PKR", rate: 278.5, change: 0.0, flagBase: "🇺🇸", flagQuote: "🇵🇰", sparkline: generateSparkline(0) },
+];
+
+/** Sample commodities */
+export const SAMPLE_COMMODITIES: CommodityAsset[] = [
+  { id: "gold", name: "Gold", price: 1950.2, change: 0.4, unit: "per oz", icon: "🪙", sparkline: generateSparkline(1) },
+  { id: "silver", name: "Silver", price: 23.4, change: -1.2, unit: "per oz", icon: "🪙", sparkline: generateSparkline(-1) },
+  { id: "oil", name: "Crude Oil", price: 82.5, change: 2.1, unit: "per bbl", icon: "🛢️", sparkline: generateSparkline(1) },
+  { id: "copper", name: "Copper", price: 3.8, change: -0.5, unit: "per lb", icon: "🧱", sparkline: generateSparkline(-1) },
+  { id: "natgas", name: "Natural Gas", price: 2.9, change: 1.8, unit: "per MMBtu", icon: "🔥", sparkline: generateSparkline(1) },
+  { id: "wheat", name: "Wheat", price: 580.4, change: -2.4, unit: "per bu", icon: "🌾", sparkline: generateSparkline(-1) },
+  { id: "corn", name: "Corn", price: 475.2, change: 0.9, unit: "per bu", icon: "🌽", sparkline: generateSparkline(1) },
+  { id: "coffee", name: "Coffee", price: 155.8, change: -0.3, unit: "per lb", icon: "☕", sparkline: generateSparkline(-1) },
+];

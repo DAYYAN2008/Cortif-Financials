@@ -349,13 +349,7 @@ function MobileNav() {
           </span>
           <MobileLink href="/portfolio" label="Portfolio" />
           <MobileLink href="/tools" label="Financial Tools" />
-
-          {/* General */}
-          <span className="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">
-            General
-          </span>
-          <MobileLink href="/news" label="News" />
-          <MobileLink label="Academy" />
+          <MobileLink href="/news" label="Market News" />
         </nav>
 
         <div className="mt-auto border-t border-slate-100 dark:border-slate-800 p-4 flex items-center justify-between">
@@ -528,7 +522,7 @@ export function Navbar() {
               </NavigationMenuLink>
             </NavigationMenuItem>
 
-            {/* ── News (Plain Text) ── */}
+            {/* ── News (Direct Link) ── */}
             <NavigationMenuItem>
               <NavigationMenuLink
                 href="/news"
@@ -537,17 +531,6 @@ export function Navbar() {
               >
                 <span className="text-[13px] font-medium text-slate-700 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white">
                   News
-                </span>
-              </NavigationMenuLink>
-            </NavigationMenuItem>
-
-            {/* ── Academy (Plain Text) ── */}
-            <NavigationMenuItem>
-              <NavigationMenuLink
-                className={`${navigationMenuTriggerStyle()} cursor-pointer`}
-              >
-                <span className="text-[13px] font-medium text-slate-700 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white">
-                  Academy
                 </span>
               </NavigationMenuLink>
             </NavigationMenuItem>

@@ -11,6 +11,9 @@ import type {
 import {
   SAMPLE_MUTUAL_FUNDS,
   SAMPLE_PAYOUTS,
+  SAMPLE_STOCKS,
+  SAMPLE_FOREX,
+  SAMPLE_COMMODITIES,
 } from "@/types/market";
 
 /* ------------------------------------------------------------------ */
@@ -136,10 +139,10 @@ function transformCommodities(
  */
 export function useMarketData(): UseMarketDataReturn {
   const [data, setData] = useState<MarketDataPayload>({
-    stocks: [],
+    stocks: SAMPLE_STOCKS,
     mutualFunds: SAMPLE_MUTUAL_FUNDS,
-    forex: [],
-    commodities: [],
+    forex: SAMPLE_FOREX,
+    commodities: SAMPLE_COMMODITIES,
     payouts: SAMPLE_PAYOUTS,
     lastUpdated: new Date().toISOString(),
     feedStatus: "connecting",
