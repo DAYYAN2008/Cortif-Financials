@@ -99,6 +99,7 @@ function AssetRow({
 function PillTabs({
   activeTab,
   onTabChange,
+  layoutGroup,
 }: {
   activeTab: TabFilter;
   onTabChange: (tab: TabFilter) => void;
